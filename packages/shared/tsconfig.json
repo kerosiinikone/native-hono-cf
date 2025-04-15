@@ -1,0 +1,14 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+       "module": "ESNext", 
+       "moduleResolution": "Bundler",
+       "lib": ["ESNext", "WebWorker"],
+       "types": ["@cloudflare/workers-types"],
+       "paths": {
+         "@my-cool-app/shared": ["../shared/src"]
+       }
+     },
+    "include": ["src/**/*", "tests/**/*"],
+    "exclude": ["node_modules"]
+  }
