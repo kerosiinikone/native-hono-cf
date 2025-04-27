@@ -1,22 +1,13 @@
 import {
   Canvas,
-  fitbox,
+  Matrix4,
   notifyChange,
   Path,
-  processTransform2d,
-  rect,
   Skia,
   SkPath,
 } from "@shopify/react-native-skia";
-import type { SkMatrix } from "@shopify/react-native-skia/lib/typescript/src/skia/types";
 import { useState } from "react";
-import {
-  Button,
-  ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { Button, View } from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -27,25 +18,54 @@ import {
   SharedValue,
   useSharedValue,
 } from "react-native-reanimated";
-import { Mutable } from "react-native-reanimated/lib/typescript/commonTypes";
+import PathObject from "./Path";
 
 type DrawingMode = "draw" | "select" | "move";
 
 type Path = {
   path: SkPath;
-  matrix?: Mutable<SkMatrix>;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  matrix: SharedValue<Matrix4>;
 };
 
-export default function HomeScreen() {
-  const { width, height } = useWindowDimensions();
+function copyMatrix4(m: Matrix4): Matrix4 {
+  return [
+    m[0],
+    m[1],
+    m[2],
+    m[3],
+    m[4],
+    m[5],
+    m[6],
+    m[7],
+    m[8],
+    m[9],
+    m[10],
+    m[11],
+    m[12],
+    m[13],
+    m[14],
+    m[15],
+  ];
+}
 
+export default function HomeScreen() {
   const path = Skia.Path.Make();
-  const currentPath = useSharedValue(path.moveTo(0, 0));
+  const currentPath = useSharedValue(path);
   const [paths, setPaths] = useState<Path[]>([]);
+  const matrix = useSharedValue(Matrix4());
 
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("draw");
 
-  const drawPan = Gesture.Pan()
+  const resetCanvasVariables = () => {
+    currentPath.value = Skia.Path.Make();
+    matrix.value = Matrix4();
+  };
+
+  const draw = Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
     .onBegin((e) => {
@@ -57,97 +77,115 @@ export default function HomeScreen() {
       currentPath.value.lineTo(e.x, e.y);
       notifyChange(currentPath as SharedValue<unknown>);
     })
-    .onFinalize((e) => {
-      const src = rect(0, 0, e.translationX, e.translationY); // Maybe?
-      const dst = rect(0, 0, width, height);
-      const m3 = processTransform2d(fitbox("contain", src, dst));
-      const matrix = makeMutable(m3);
+    .onEnd(() => {
+      // Not yet fully implemented
+
+      const width = Math.abs(
+        currentPath.value.getPoint(0).x - currentPath.value.getLastPt().x
+      );
+      const height = Math.abs(
+        currentPath.value.getPoint(0).y - currentPath.value.getLastPt().y
+      );
+
+      console.log("width", width, "height", height);
+      console.log("first", currentPath.value.getPoint(0));
+      console.log("last", currentPath.value.getLastPt());
 
       setPaths([
         ...paths,
         {
           path: currentPath.value.copy(),
-          matrix: matrix,
+          x: currentPath.value.getPoint(0).x,
+          y: currentPath.value.getPoint(0).y,
+          width,
+          height,
+          matrix: makeMutable(copyMatrix4(matrix.value)),
         },
       ]);
+
+      resetCanvasVariables();
     })
     .enabled(drawingMode === "draw");
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <GestureDetector gesture={drawPan}>
-        <ScrollView
-          contentContainerStyle={{
-            width,
-            height,
-          }}
-        >
-          <Canvas style={{ height: "100%" }}>
-            {paths.map((path, i) => (
-              <Path
-                key={i}
-                path={path.path}
-                style="stroke"
-                strokeWidth={5}
-                strokeCap="round"
-                strokeJoin="round"
-              />
-            ))}
+      <GestureDetector gesture={draw}>
+        <Canvas style={{ height: "100%" }}>
+          {paths.map((path, i) => (
             <Path
-              path={currentPath}
+              key={i}
+              path={path.path}
+              matrix={path.matrix}
               style="stroke"
               strokeWidth={5}
               strokeCap="round"
               strokeJoin="round"
-            ></Path>
-          </Canvas>
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              flexDirection: "row",
-              justifyContent: "space-around",
-              alignItems: "center",
-              backgroundColor: "rgba(200, 200, 200, 0.8)",
-              paddingVertical: 8,
-              paddingHorizontal: 10,
-              zIndex: 1,
-              top: 0,
-              borderBottomWidth: 1,
-              borderBottomColor: "#ccc",
-            }}
-          >
-            <Button title="Draw" onPress={() => setDrawingMode("draw")} />
-            <Button title="Select" onPress={() => setDrawingMode("select")} />
-          </View>
-          <View
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              flexDirection: "row",
-              justifyContent: "space-around",
-              alignItems: "center",
-              backgroundColor: "rgba(200, 200, 200, 0.8)",
-              paddingVertical: 8,
-              paddingHorizontal: 10,
-              zIndex: 1,
-              bottom: 0,
-              borderTopWidth: 1,
-              borderTopColor: "#ccc",
-            }}
-          >
-            <Button
-              title="Undo"
-              onPress={() => {
-                setPaths(paths.slice(0, paths.length - 2));
-                currentPath.value = Skia.Path.Make().moveTo(0, 0);
-              }}
             />
-          </View>
-        </ScrollView>
+          ))}
+          <Path
+            path={currentPath}
+            style="stroke"
+            strokeWidth={5}
+            strokeCap="round"
+            strokeJoin="round"
+          ></Path>
+        </Canvas>
       </GestureDetector>
+      {paths.map((path, i) => (
+        <PathObject
+          key={i}
+          x={path.x}
+          y={path.y}
+          width={path.width}
+          height={path.height}
+          matrix={path.matrix}
+        />
+      ))}
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "center",
+          backgroundColor: "rgba(200, 200, 200, 0.8)",
+          paddingVertical: 8,
+          paddingHorizontal: 10,
+          zIndex: 1,
+          top: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: "#ccc",
+        }}
+      >
+        <Button title="Draw" onPress={() => setDrawingMode("draw")} />
+        <Button title="Select" onPress={() => setDrawingMode("select")} />
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          flexDirection: "row",
+          justifyContent: "space-around",
+          alignItems: "center",
+          backgroundColor: "rgba(200, 200, 200, 0.8)",
+          paddingVertical: 8,
+          paddingHorizontal: 10,
+          zIndex: 1,
+          bottom: 0,
+          borderTopWidth: 1,
+          borderTopColor: "#ccc",
+        }}
+      >
+        <Button
+          title="Undo"
+          onPress={() => {
+            setPaths(paths.slice(0, paths.length - 1));
+            resetCanvasVariables();
+          }}
+        />
+      </View>
     </GestureHandlerRootView>
   );
 }
