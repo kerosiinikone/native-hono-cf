@@ -58,6 +58,13 @@ export default function HomeScreen() {
   const [paths, setPaths] = useState<Path[]>([]);
   const matrix = useSharedValue(Matrix4());
 
+  const currentPathDimensions = useSharedValue({
+    xup: 0,
+    xdown: 0,
+    yup: 0,
+    ydown: 0,
+  });
+
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("draw");
 
   const resetCanvasVariables = () => {
@@ -71,32 +78,50 @@ export default function HomeScreen() {
     .onBegin((e) => {
       currentPath.value.moveTo(e.x, e.y);
       currentPath.value.lineTo(e.x, e.y);
+
+      currentPathDimensions.value.xup = e.x;
+      currentPathDimensions.value.xdown = e.x;
+      currentPathDimensions.value.yup = e.y;
+      currentPathDimensions.value.ydown = e.y;
+
       notifyChange(currentPath as SharedValue<unknown>);
     })
     .onChange((e) => {
+      if (e.y > currentPathDimensions.value.yup) {
+        currentPathDimensions.value.yup = e.y;
+      } else if (e.y < currentPathDimensions.value.ydown) {
+        currentPathDimensions.value.ydown = e.y;
+      }
+
+      if (e.x > currentPathDimensions.value.xup) {
+        currentPathDimensions.value.xup = e.x;
+      } else if (e.x < currentPathDimensions.value.xdown) {
+        currentPathDimensions.value.xdown = e.x;
+      }
+
       currentPath.value.lineTo(e.x, e.y);
       notifyChange(currentPath as SharedValue<unknown>);
     })
     .onEnd(() => {
-      // Not yet fully implemented
-
       const width = Math.abs(
-        currentPath.value.getPoint(0).x - currentPath.value.getLastPt().x
+        currentPathDimensions.value.xup - currentPathDimensions.value.xdown
       );
       const height = Math.abs(
-        currentPath.value.getPoint(0).y - currentPath.value.getLastPt().y
+        currentPathDimensions.value.yup - currentPathDimensions.value.ydown
       );
-
-      console.log("width", width, "height", height);
-      console.log("first", currentPath.value.getPoint(0));
-      console.log("last", currentPath.value.getLastPt());
 
       setPaths([
         ...paths,
         {
           path: currentPath.value.copy(),
-          x: currentPath.value.getPoint(0).x,
-          y: currentPath.value.getPoint(0).y,
+          x: Math.min(
+            currentPathDimensions.value.xup,
+            currentPathDimensions.value.xdown
+          ),
+          y: Math.min(
+            currentPathDimensions.value.yup,
+            currentPathDimensions.value.ydown
+          ),
           width,
           height,
           matrix: makeMutable(copyMatrix4(matrix.value)),
