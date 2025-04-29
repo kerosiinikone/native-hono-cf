@@ -6,7 +6,7 @@ import {
   Skia,
   SkPath,
 } from "@shopify/react-native-skia";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, View } from "react-native";
 import {
   Gesture,
@@ -19,6 +19,7 @@ import {
   useSharedValue,
 } from "react-native-reanimated";
 import PathObject from "./Path";
+import { DocumentState, PathElement } from "@/types/types";
 
 type DrawingMode = "draw" | "select" | "move";
 
@@ -58,6 +59,8 @@ export default function HomeScreen() {
   const [paths, setPaths] = useState<Path[]>([]);
   const matrix = useSharedValue(Matrix4());
 
+  const [appState, setAppState] = useState<DocumentState>({ elements: [] });
+
   const currentPathDimensions = useSharedValue({
     xup: 0,
     xdown: 0,
@@ -71,6 +74,9 @@ export default function HomeScreen() {
     currentPath.value = Skia.Path.Make();
     matrix.value = Matrix4();
   };
+
+  // For abstracting simple state updates with the undo button as well
+  // const modifyState = () => {};
 
   const draw = Gesture.Pan()
     .averageTouches(true)
@@ -110,27 +116,70 @@ export default function HomeScreen() {
         currentPathDimensions.value.yup - currentPathDimensions.value.ydown
       );
 
-      setPaths([
-        ...paths,
-        {
-          path: currentPath.value.copy(),
-          x: Math.min(
-            currentPathDimensions.value.xup,
-            currentPathDimensions.value.xdown
-          ),
-          y: Math.min(
-            currentPathDimensions.value.yup,
-            currentPathDimensions.value.ydown
-          ),
-          width,
-          height,
-          matrix: makeMutable(copyMatrix4(matrix.value)),
+      const newPath = {
+        path: currentPath.value.copy(),
+        x: Math.min(
+          currentPathDimensions.value.xup,
+          currentPathDimensions.value.xdown
+        ),
+        y: Math.min(
+          currentPathDimensions.value.yup,
+          currentPathDimensions.value.ydown
+        ),
+        width,
+        height,
+        matrix: makeMutable(copyMatrix4(matrix.value)),
+      };
+
+      setPaths([...paths, newPath]);
+
+      const newPathElement = {
+        id: `${crypto.randomUUID()}`,
+        type: "path",
+        properties: {
+          ...newPath,
+          path: newPath.path.toSVGString(),
+          matrix: newPath.matrix.value,
         },
-      ]);
+      } as PathElement;
+
+      const newAppState = {
+        elements: appState.elements.concat([newPathElement]),
+      } as DocumentState;
+
+      setAppState(newAppState);
+
+      localStorage.setItem("appState", JSON.stringify(newAppState));
 
       resetCanvasVariables();
     })
     .enabled(drawingMode === "draw");
+
+  // For testing
+  useEffect(() => {
+    const stateStr = localStorage.getItem("appState");
+
+    if (stateStr) {
+      const parsedData = JSON.parse(stateStr) as DocumentState;
+
+      if (!parsedData.elements) return;
+
+      const newPaths = parsedData.elements
+        .filter((el) => el.type === "path")
+        .map((el) => {
+          const pathElement = el as PathElement;
+          return {
+            ...pathElement.properties,
+            path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
+            matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
+          };
+        })
+        .filter(Boolean) as Path[];
+
+      setAppState(parsedData);
+      setPaths(newPaths);
+    }
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -207,6 +256,10 @@ export default function HomeScreen() {
           title="Undo"
           onPress={() => {
             setPaths(paths.slice(0, paths.length - 1));
+            setAppState((prev) => ({
+              ...prev,
+              elements: prev.elements.slice(0, prev.elements.length - 1),
+            }));
             resetCanvasVariables();
           }}
         />
