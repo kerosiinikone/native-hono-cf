@@ -54,8 +54,10 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 }
 
 export default function HomeScreen() {
+  // InitPaths()
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
+
   const [paths, setPaths] = useState<Path[]>([]);
   const matrix = useSharedValue(Matrix4());
 
@@ -205,16 +207,37 @@ export default function HomeScreen() {
           ></Path>
         </Canvas>
       </GestureDetector>
-      {paths.map((path, i) => (
-        <PathObject
-          key={i}
-          x={path.x}
-          y={path.y}
-          width={path.width}
-          height={path.height}
-          matrix={path.matrix}
-        />
-      ))}
+      {drawingMode === "select" &&
+        paths.map((path, i) => (
+          <PathObject
+            key={i}
+            x={path.x}
+            y={path.y}
+            width={path.width}
+            height={path.height}
+            matrix={path.matrix}
+            updatePath={(params: Matrix4) => {
+              const newAppState = {
+                elements: appState.elements.map((el, j) => {
+                  if (j === i) {
+                    return {
+                      ...el,
+                      properties: {
+                        ...el.properties,
+                        matrix: params,
+                      },
+                    };
+                  }
+                  return el;
+                }),
+              } as DocumentState;
+
+              setAppState(newAppState);
+
+              localStorage.setItem("appState", JSON.stringify(newAppState));
+            }}
+          />
+        ))}
       <View
         style={{
           position: "absolute",

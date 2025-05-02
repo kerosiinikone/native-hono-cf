@@ -5,6 +5,7 @@ import {
   rotateZ,
   scale,
 } from "@shopify/react-native-skia";
+import { useCallback } from "react";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   SharedValue,
@@ -19,19 +20,31 @@ const PathObject = ({
   y,
   width,
   height,
+  updatePath,
 }: {
   matrix: SharedValue<Matrix4>;
   x: number;
   y: number;
   width: number;
   height: number;
+  updatePath: (params: Matrix4) => void;
 }) => {
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
 
-  const pan = Gesture.Pan().onChange((e) => {
-    matrix.value = multiply4(translate(e.changeX, e.changeY, 0), matrix.value);
-  });
+  // Make sure this is correct
+  const updateOnEnd = useCallback(() => {
+    updatePath(matrix.value);
+  }, [matrix.value, updatePath, savedMatrix.value]);
+
+  const pan = Gesture.Pan()
+    .onChange((e) => {
+      matrix.value = multiply4(
+        translate(e.changeX, e.changeY, 0),
+        matrix.value
+      );
+    })
+    .onEnd(updateOnEnd);
 
   const rotate = Gesture.Rotation()
     .onBegin((e) => {
@@ -43,7 +56,8 @@ const PathObject = ({
         savedMatrix.value,
         rotateZ(e.rotation, origin.value)
       );
-    });
+    })
+    .onEnd(updateOnEnd);
 
   const pinch = Gesture.Pinch()
     .onBegin((e) => {
@@ -55,7 +69,8 @@ const PathObject = ({
         savedMatrix.value,
         scale(e.scale, e.scale, 1, origin.value)
       );
-    });
+    })
+    .onEnd(updateOnEnd);
 
   const gesture = Gesture.Simultaneous(pan, pinch, rotate);
 
