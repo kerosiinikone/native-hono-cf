@@ -20,6 +20,7 @@ import {
 } from "react-native-reanimated";
 import PathObject from "./Path";
 import { DocumentState, PathElement } from "@/types/types";
+import { SERVER_URL } from "@/constants/server";
 
 type DrawingMode = "draw" | "select" | "move";
 
@@ -110,7 +111,7 @@ export default function HomeScreen() {
       currentPath.value.lineTo(e.x, e.y);
       notifyChange(currentPath as SharedValue<unknown>);
     })
-    .onEnd(() => {
+    .onEnd(async () => {
       const width = Math.abs(
         currentPathDimensions.value.xup - currentPathDimensions.value.xdown
       );
@@ -152,6 +153,25 @@ export default function HomeScreen() {
       setAppState(newAppState);
 
       localStorage.setItem("appState", JSON.stringify(newAppState));
+
+      await fetch(`${SERVER_URL}/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": "true",
+        },
+        body: JSON.stringify({
+          state: JSON.stringify(newAppState),
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Document saved:", data);
+        })
+        .catch((error) => {
+          console.error("Error saving document:", error);
+        });
 
       resetCanvasVariables();
     })
