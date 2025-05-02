@@ -20,9 +20,11 @@ const PathObject = ({
   y,
   width,
   height,
+  canvasMatrix,
   updatePath,
 }: {
   matrix: SharedValue<Matrix4>;
+  canvasMatrix: SharedValue<Matrix4>;
   x: number;
   y: number;
   width: number;
@@ -32,10 +34,9 @@ const PathObject = ({
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
 
-  // Make sure this is correct
   const updateOnEnd = useCallback(() => {
     updatePath(matrix.value);
-  }, [matrix.value, updatePath, savedMatrix.value]);
+  }, [savedMatrix, matrix, updatePath]);
 
   const pan = Gesture.Pan()
     .onChange((e) => {
@@ -44,7 +45,8 @@ const PathObject = ({
         matrix.value
       );
     })
-    .onEnd(updateOnEnd);
+    .onEnd(updateOnEnd)
+    .runOnJS(true);
 
   const rotate = Gesture.Rotation()
     .onBegin((e) => {
@@ -57,7 +59,8 @@ const PathObject = ({
         rotateZ(e.rotation, origin.value)
       );
     })
-    .onEnd(updateOnEnd);
+    .onEnd(updateOnEnd)
+    .runOnJS(true);
 
   const pinch = Gesture.Pinch()
     .onBegin((e) => {
@@ -70,13 +73,19 @@ const PathObject = ({
         scale(e.scale, e.scale, 1, origin.value)
       );
     })
-    .onEnd(updateOnEnd);
+    .onEnd(updateOnEnd)
+    .runOnJS(true);
 
   const gesture = Gesture.Simultaneous(pan, pinch, rotate);
 
   const style = useAnimatedStyle(() => {
     const m = multiply4(translate(x, y, 0), matrix.value);
-    const m4 = convertToColumnMajor(m);
+    const shiftedM = multiply4(
+      translate(canvasMatrix.value[3], canvasMatrix.value[7], 0),
+      m
+    );
+    const m4 = convertToColumnMajor(shiftedM);
+
     return {
       position: "absolute",
       backgroundColor: "rgba(0, 0, 0, 0.5)",

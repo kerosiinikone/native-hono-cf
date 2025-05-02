@@ -1,12 +1,16 @@
+import { SERVER_URL } from "@/constants/server";
+import { DocumentState, PathElement } from "@/types/types";
 import {
   Canvas,
+  Group,
   Matrix4,
   notifyChange,
   Path,
+  scale,
   Skia,
   SkPath,
 } from "@shopify/react-native-skia";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, View } from "react-native";
 import {
   Gesture,
@@ -16,11 +20,11 @@ import {
 import {
   makeMutable,
   SharedValue,
+  useDerivedValue,
   useSharedValue,
 } from "react-native-reanimated";
 import PathObject from "./Path";
-import { DocumentState, PathElement } from "@/types/types";
-import { SERVER_URL } from "@/constants/server";
+import { multiply4, translate } from "react-native-redash";
 
 type DrawingMode = "draw" | "select" | "move";
 
@@ -59,8 +63,14 @@ export default function HomeScreen() {
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
 
+  let document_id = useRef(""); // For now
+
   const [paths, setPaths] = useState<Path[]>([]);
   const matrix = useSharedValue(Matrix4());
+
+  const canvasMatrix = useSharedValue(Matrix4());
+  const cSavedMatrix = useSharedValue(Matrix4());
+  const cOrigin = useSharedValue({ x: 0, y: 0 });
 
   const [appState, setAppState] = useState<DocumentState>({ elements: [] });
 
@@ -119,6 +129,7 @@ export default function HomeScreen() {
         currentPathDimensions.value.yup - currentPathDimensions.value.ydown
       );
 
+      // Implement canvas zoom shift also
       const newPath = {
         path: currentPath.value.copy(),
         x: Math.min(
@@ -131,7 +142,12 @@ export default function HomeScreen() {
         ),
         width,
         height,
-        matrix: makeMutable(copyMatrix4(matrix.value)),
+        matrix: makeMutable(
+          multiply4(
+            matrix.value,
+            translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
+          )
+        ),
       };
 
       setPaths([...paths, newPath]);
@@ -154,28 +170,57 @@ export default function HomeScreen() {
 
       localStorage.setItem("appState", JSON.stringify(newAppState));
 
-      await fetch(`${SERVER_URL}/documents`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Credentials": "true",
-        },
-        body: JSON.stringify({
-          state: JSON.stringify(newAppState),
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          console.log("Document saved:", data);
-        })
-        .catch((error) => {
-          console.error("Error saving document:", error);
-        });
+      // await fetch(`${SERVER_URL}/documents`, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //     "Access-Control-Allow-Origin": "*",
+      //     "Access-Control-Allow-Credentials": "true",
+      //   },
+      //   body: JSON.stringify({
+      //     id: document_id.current,
+      //     state: JSON.stringify(newAppState),
+      //   }),
+      // })
+      //   .then((res) => res.json())
+      //   .then((data) => {
+      //     document_id.current = data.id as string;
+      //   })
+      //   .catch((error) => {
+      //     console.error("Error saving document:", error);
+      //   });
 
       resetCanvasVariables();
     })
-    .enabled(drawingMode === "draw");
+    .enabled(drawingMode === "draw")
+    .runOnJS(true);
+
+  const move = Gesture.Pan()
+    .averageTouches(true)
+    .maxPointers(1)
+    .onChange((e) => {
+      "worklet";
+      canvasMatrix.value = multiply4(
+        translate(e.changeX, e.changeY, 0),
+        canvasMatrix.value
+      );
+    });
+
+  const zoom = Gesture.Pinch()
+    .onBegin((e) => {
+      "worklet";
+      cOrigin.value = { x: e.focalX, y: e.focalY };
+      cSavedMatrix.value = matrix.value;
+    })
+    .onChange((e) => {
+      "worklet";
+      canvasMatrix.value = multiply4(
+        cSavedMatrix.value,
+        scale(e.scale, e.scale, 1, cOrigin.value)
+      );
+    });
+
+  const combined = Gesture.Race(move, zoom);
 
   // For testing
   useEffect(() => {
@@ -203,21 +248,27 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const transform = useDerivedValue(() => {
+    return [{ matrix: canvasMatrix.value }];
+  });
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <GestureDetector gesture={draw}>
+      <GestureDetector gesture={drawingMode === "draw" ? draw : combined}>
         <Canvas style={{ height: "100%" }}>
-          {paths.map((path, i) => (
-            <Path
-              key={i}
-              path={path.path}
-              matrix={path.matrix}
-              style="stroke"
-              strokeWidth={5}
-              strokeCap="round"
-              strokeJoin="round"
-            />
-          ))}
+          <Group transform={transform}>
+            {paths.map((path, i) => (
+              <Path
+                key={i}
+                path={path.path}
+                matrix={path.matrix}
+                style="stroke"
+                strokeWidth={5}
+                strokeCap="round"
+                strokeJoin="round"
+              />
+            ))}
+          </Group>
           <Path
             path={currentPath}
             style="stroke"
@@ -234,6 +285,7 @@ export default function HomeScreen() {
             x={path.x}
             y={path.y}
             width={path.width}
+            canvasMatrix={canvasMatrix}
             height={path.height}
             matrix={path.matrix}
             updatePath={(params: Matrix4) => {
@@ -276,6 +328,7 @@ export default function HomeScreen() {
         }}
       >
         <Button title="Draw" onPress={() => setDrawingMode("draw")} />
+        <Button title="Move" onPress={() => setDrawingMode("move")} />
         <Button title="Select" onPress={() => setDrawingMode("select")} />
       </View>
       <View

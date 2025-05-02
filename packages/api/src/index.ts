@@ -11,6 +11,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 const documentSchema = z.object({
   state: z.string(),
+  id: z.string().optional(),
 });
 
 app.use("/*", cors());
@@ -46,16 +47,17 @@ app.post(
       typeof documentSchema
     >;
 
-    const { state } = body;
-    const id = crypto.randomUUID();
+    const { state, id } = body;
 
     if (!state) {
-      return c.json({ error: "Missing required fields: id, state" }, 400);
+      return c.json({ error: "Missing required fields: state" }, 400);
     }
 
     await db
-      .prepare("INSERT INTO documents (document_id, state) VALUES (?, ?)")
-      .bind(id, state)
+      .prepare(
+        "INSERT INTO documents (document_id, state) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET state = ?"
+      )
+      .bind(id ?? crypto.randomUUID(), state, state)
       .run();
 
     return c.json({ id, state });
