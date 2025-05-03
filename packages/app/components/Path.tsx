@@ -2,6 +2,7 @@ import {
   convertToAffineMatrix,
   convertToColumnMajor,
   Matrix4,
+  rotateZ,
   scale,
 } from "@shopify/react-native-skia";
 import { useCallback } from "react";
@@ -11,7 +12,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
-import { multiply4, translate } from "react-native-redash";
+import { multiply4, translate, rotate } from "react-native-redash";
 
 const multiply = (...matrices: Matrix4[]) => {
   "worklet";
@@ -56,19 +57,23 @@ const PathObject = ({
     })
     .onEnd(updateOnEnd);
 
-  // const rotate = Gesture.Rotation()
-  //   .onBegin((e) => {
-  //     origin.value = { x: x + width / 2, y: y + height / 2 };
-  //     savedMatrix.value = matrix.value;
-  //   })
-  //   .onChange((e) => {
-  //     matrix.value = multiply4(
-  //       savedMatrix.value,
-  //       rotateZ(e.rotation, origin.value)
-  //     );
-  //   })
-  //   .onEnd(updateOnEnd)
-  //   .runOnJS(true);
+  const rotate = Gesture.Rotation()
+    .onBegin(() => {
+      "worklet";
+      origin.value = {
+        x: focalX,
+        y: focalY,
+      };
+      savedMatrix.value = matrix.value;
+    })
+    .onChange((e) => {
+      "worklet";
+      matrix.value = multiply4(
+        savedMatrix.value,
+        rotateZ(e.rotation, origin.value)
+      );
+    })
+    .onEnd(updateOnEnd);
 
   const pinch = Gesture.Pinch()
     .onBegin(() => {
@@ -88,7 +93,7 @@ const PathObject = ({
     })
     .onEnd(updateOnEnd);
 
-  const gesture = Gesture.Simultaneous(pan, pinch);
+  const gesture = Gesture.Simultaneous(pan, pinch, rotate);
 
   const style = useAnimatedStyle(() => {
     const finalMatrix = multiply(canvasMatrix.value, matrix.value);
