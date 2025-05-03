@@ -12,7 +12,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
-import { multiply4, translate, rotate } from "react-native-redash";
+import { multiply4, translate } from "react-native-redash";
 
 const multiply = (...matrices: Matrix4[]) => {
   "worklet";

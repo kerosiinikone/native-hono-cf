@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "strict": false,
+  "compilerOptions": {
+    "jsx": "react-native",
+    "paths": {
+      "@native-hono-cf/shared": ["../../packages/shared/src"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "references": [{ "path": "../../packages/shared" }]
+}

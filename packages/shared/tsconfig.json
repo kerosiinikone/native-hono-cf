@@ -1,14 +1,14 @@
 {
-    "extends": "../../tsconfig.base.json",
-    "compilerOptions": {
-       "module": "ESNext", 
-       "moduleResolution": "Bundler",
-       "lib": ["ESNext", "WebWorker"],
-       "types": ["@cloudflare/workers-types"],
-       "paths": {
-         "@my-cool-app/shared": ["../shared/src"]
-       }
-     },
-    "include": ["src/**/*", "tests/**/*"],
-    "exclude": ["node_modules"]
-  }
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "noEmit": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

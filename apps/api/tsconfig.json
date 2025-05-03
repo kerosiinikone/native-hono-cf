@@ -4,11 +4,14 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strict": true,
+    "paths": {
+      "@native-hono-cf/shared": ["../../packages/shared/src"]
+    },
     "skipLibCheck": true,
     "lib": ["ESNext"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx",
     "types": ["@cloudflare/workers-types/2023-07-01"]
-  }
+  },
+  "references": [{ "path": "../../packages/shared" }]
 }

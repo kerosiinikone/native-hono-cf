@@ -5,6 +5,7 @@ import { z } from "zod";
 
 type Bindings = {
   DB: D1Database;
+  DURABLE_OBJECT: any;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -53,15 +54,19 @@ app.post(
       return c.json({ error: "Missing required fields: state" }, 400);
     }
 
+    const document_id = id ?? crypto.randomUUID();
+
     await db
       .prepare(
-        "INSERT INTO documents (document_id, state) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET state = ?"
+        "INSERT INTO documents (document_id, state) VALUES (?, ?) ON CONFLICT(document_id) DO UPDATE SET state = ?"
       )
-      .bind(id ?? crypto.randomUUID(), state, state)
+      .bind(document_id, state, state)
       .run();
 
-    return c.json({ id, state });
+    return c.json({ id: document_id, state });
   }
 );
+
+app.get("/api/ws/:documentId");
 
 export default app;

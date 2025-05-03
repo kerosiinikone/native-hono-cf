@@ -1,4 +1,5 @@
-import { DocumentState, PathElement } from "@/types/types";
+import { SERVER_URL } from "@/constants/server";
+import { DocumentState, PathElement } from "@native-hono-cf/shared";
 import {
   Canvas,
   Group,
@@ -61,21 +62,14 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 export default function HomeScreen() {
   // InitPaths()
 
-  const path = Skia.Path.Make();
-  const currentPath = useSharedValue(path);
-
   let document_id = useRef(""); // For now
+  const path = Skia.Path.Make();
 
-  const [paths, setPaths] = useState<Path[]>([]);
+  const currentPath = useSharedValue(path);
   const matrix = useSharedValue(Matrix4());
-
   const canvasMatrix = useSharedValue(Matrix4());
-
   // const cSavedMatrix = useSharedValue(Matrix4());
   // const cOrigin = useSharedValue({ x: 0, y: 0 });
-
-  const [appState, setAppState] = useState<DocumentState>({ elements: [] });
-
   const currentPathDimensions = useSharedValue({
     xup: 0,
     xdown: 0,
@@ -83,15 +77,14 @@ export default function HomeScreen() {
     ydown: 0,
   });
 
+  const [appState, setAppState] = useState<DocumentState>({ elements: [] });
+  const [paths, setPaths] = useState<Path[]>([]);
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("draw");
 
   const resetCanvasVariables = () => {
     currentPath.value = Skia.Path.Make();
     matrix.value = Matrix4();
   };
-
-  // For abstracting simple state updates with the undo button as well
-  // const modifyState = () => {};
 
   const draw = Gesture.Pan()
     .averageTouches(true)
@@ -131,7 +124,6 @@ export default function HomeScreen() {
         currentPathDimensions.value.yup - currentPathDimensions.value.ydown
       );
 
-      // Implement canvas zoom shift also
       const newPath = {
         path: currentPath.value.copy(),
         x: Math.min(
@@ -184,25 +176,28 @@ export default function HomeScreen() {
 
       localStorage.setItem("appState", JSON.stringify(newAppState));
 
-      // await fetch(`${SERVER_URL}/documents`, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //     "Access-Control-Allow-Origin": "*",
-      //     "Access-Control-Allow-Credentials": "true",
-      //   },
-      //   body: JSON.stringify({
-      //     id: document_id.current,
-      //     state: JSON.stringify(newAppState),
-      //   }),
-      // })
-      //   .then((res) => res.json())
-      //   .then((data) => {
-      //     document_id.current = data.id as string;
-      //   })
-      //   .catch((error) => {
-      //     console.error("Error saving document:", error);
-      //   });
+      // To test persiting logic -> DOs handle this in the backend
+      await fetch(`${SERVER_URL}/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Credentials": "true",
+        },
+        body: JSON.stringify({
+          id: document_id.current === "" ? undefined : document_id.current,
+          state: JSON.stringify(newAppState),
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log(data);
+
+          document_id.current = data.id as string;
+        })
+        .catch((error) => {
+          console.error("Error saving document:", error);
+        });
 
       resetCanvasVariables();
     })
