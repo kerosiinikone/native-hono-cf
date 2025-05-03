@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "app",
-    "slug": "app",
+    "slug": "native-cf-hono",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -33,10 +33,20 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "c220e5b5-b8b4-4db2-b5b8-6f8c80178387"
+      }
+    },
+    "owner": "kerosiinikone"
   }
 }

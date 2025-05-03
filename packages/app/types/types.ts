@@ -21,6 +21,8 @@ export interface PathElement extends Element {
     path: string;
     x: number;
     y: number;
+    focalX: number;
+    focalY: number;
     width: number;
     height: number;
     matrix: Matrix4;

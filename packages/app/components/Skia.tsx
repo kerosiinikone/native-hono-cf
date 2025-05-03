@@ -1,4 +1,3 @@
-import { SERVER_URL } from "@/constants/server";
 import { DocumentState, PathElement } from "@/types/types";
 import {
   Canvas,
@@ -6,7 +5,6 @@ import {
   Matrix4,
   notifyChange,
   Path,
-  scale,
   Skia,
   SkPath,
 } from "@shopify/react-native-skia";
@@ -23,8 +21,8 @@ import {
   useDerivedValue,
   useSharedValue,
 } from "react-native-reanimated";
-import PathObject from "./Path";
 import { multiply4, translate } from "react-native-redash";
+import PathObject from "./Path";
 
 type DrawingMode = "draw" | "select" | "move";
 
@@ -32,6 +30,8 @@ type Path = {
   path: SkPath;
   x: number;
   y: number;
+  focalX: number;
+  focalY: number;
   width: number;
   height: number;
   matrix: SharedValue<Matrix4>;
@@ -60,6 +60,7 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 
 export default function HomeScreen() {
   // InitPaths()
+
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
 
@@ -69,8 +70,9 @@ export default function HomeScreen() {
   const matrix = useSharedValue(Matrix4());
 
   const canvasMatrix = useSharedValue(Matrix4());
-  const cSavedMatrix = useSharedValue(Matrix4());
-  const cOrigin = useSharedValue({ x: 0, y: 0 });
+
+  // const cSavedMatrix = useSharedValue(Matrix4());
+  // const cOrigin = useSharedValue({ x: 0, y: 0 });
 
   const [appState, setAppState] = useState<DocumentState>({ elements: [] });
 
@@ -140,6 +142,18 @@ export default function HomeScreen() {
           currentPathDimensions.value.yup,
           currentPathDimensions.value.ydown
         ),
+        focalX:
+          Math.min(
+            currentPathDimensions.value.xup,
+            currentPathDimensions.value.xdown
+          ) +
+          width / 2,
+        focalY:
+          Math.min(
+            currentPathDimensions.value.yup,
+            currentPathDimensions.value.ydown
+          ) +
+          height / 2,
         width,
         height,
         matrix: makeMutable(
@@ -153,7 +167,7 @@ export default function HomeScreen() {
       setPaths([...paths, newPath]);
 
       const newPathElement = {
-        id: `${crypto.randomUUID()}`,
+        id: Math.random().toString(36).substring(2, 9), // crypto.randomUUID(),
         type: "path",
         properties: {
           ...newPath,
@@ -206,21 +220,21 @@ export default function HomeScreen() {
       );
     });
 
-  const zoom = Gesture.Pinch()
-    .onBegin((e) => {
-      "worklet";
-      cOrigin.value = { x: e.focalX, y: e.focalY };
-      cSavedMatrix.value = matrix.value;
-    })
-    .onChange((e) => {
-      "worklet";
-      canvasMatrix.value = multiply4(
-        cSavedMatrix.value,
-        scale(e.scale, e.scale, 1, cOrigin.value)
-      );
-    });
+  // const zoom = Gesture.Pinch()
+  //   .onBegin((e) => {
+  //     "worklet";
+  //     cOrigin.value = { x: e.focalX, y: e.focalY };
+  //     cSavedMatrix.value = matrix.value;
+  //   })
+  //   .onChange((e) => {
+  //     "worklet";
+  //     canvasMatrix.value = multiply4(
+  //       cSavedMatrix.value,
+  //       scale(e.scale, e.scale, 1, cOrigin.value)
+  //     );
+  //   });
 
-  const combined = Gesture.Race(move, zoom);
+  const combined = Gesture.Simultaneous(move);
 
   // For testing
   useEffect(() => {
@@ -284,6 +298,8 @@ export default function HomeScreen() {
             key={i}
             x={path.x}
             y={path.y}
+            focalX={path.focalX}
+            focalY={path.focalY}
             width={path.width}
             canvasMatrix={canvasMatrix}
             height={path.height}
@@ -352,10 +368,15 @@ export default function HomeScreen() {
           title="Undo"
           onPress={() => {
             setPaths(paths.slice(0, paths.length - 1));
-            setAppState((prev) => ({
-              ...prev,
-              elements: prev.elements.slice(0, prev.elements.length - 1),
-            }));
+            const newAppState = {
+              elements: appState.elements.slice(
+                0,
+                appState.elements.length - 1
+              ),
+            };
+
+            setAppState(newAppState);
+            localStorage.setItem("appState", JSON.stringify(newAppState));
             resetCanvasVariables();
           }}
         />
