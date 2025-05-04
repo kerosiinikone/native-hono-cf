@@ -18,7 +18,8 @@
     {
       "binding": "DB",
       "database_name": "document-db",
-      "database_id": "be09b049-f7e0-444b-8306-0ce07371c4d1"
+      "database_id": "be09b049-f7e0-444b-8306-0ce07371c4d1",
+      "preview_database_id": "DB"
     }
   ],
   "durable_objects": {

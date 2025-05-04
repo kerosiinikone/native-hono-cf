@@ -59,17 +59,17 @@ function copyMatrix4(m: Matrix4): Matrix4 {
   ];
 }
 
-export default function HomeScreen() {
+export default function SkiaComponent() {
   // InitPaths()
 
-  let document_id = useRef(""); // For now
+  const socketRef = useRef<WebSocket | null>(null);
+  let document_id = useRef("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
+
   const path = Skia.Path.Make();
 
   const currentPath = useSharedValue(path);
   const matrix = useSharedValue(Matrix4());
   const canvasMatrix = useSharedValue(Matrix4());
-  // const cSavedMatrix = useSharedValue(Matrix4());
-  // const cOrigin = useSharedValue({ x: 0, y: 0 });
   const currentPathDimensions = useSharedValue({
     xup: 0,
     xdown: 0,
@@ -90,6 +90,7 @@ export default function HomeScreen() {
     .averageTouches(true)
     .maxPointers(1)
     .onBegin((e) => {
+      "worklet";
       currentPath.value.moveTo(e.x, e.y);
       currentPath.value.lineTo(e.x, e.y);
 
@@ -101,6 +102,7 @@ export default function HomeScreen() {
       notifyChange(currentPath as SharedValue<unknown>);
     })
     .onChange((e) => {
+      "worklet";
       if (e.y > currentPathDimensions.value.yup) {
         currentPathDimensions.value.yup = e.y;
       } else if (e.y < currentPathDimensions.value.ydown) {
@@ -117,6 +119,7 @@ export default function HomeScreen() {
       notifyChange(currentPath as SharedValue<unknown>);
     })
     .onEnd(async () => {
+      "worklet";
       const width = Math.abs(
         currentPathDimensions.value.xup - currentPathDimensions.value.xdown
       );
@@ -177,32 +180,31 @@ export default function HomeScreen() {
       localStorage.setItem("appState", JSON.stringify(newAppState));
 
       // To test persiting logic -> DOs handle this in the backend
-      await fetch(`${SERVER_URL}/documents`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Credentials": "true",
-        },
-        body: JSON.stringify({
-          id: document_id.current === "" ? undefined : document_id.current,
-          state: JSON.stringify(newAppState),
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          console.log(data);
+      // await fetch(`${SERVER_URL}/documents`, {
+      //   method: "POST",
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //     "Access-Control-Allow-Origin": "*",
+      //     "Access-Control-Allow-Credentials": "true",
+      //   },
+      //   body: JSON.stringify({
+      //     id: document_id.current === "" ? undefined : document_id.current,
+      //     state: JSON.stringify(newAppState),
+      //   }),
+      // })
+      //   .then((res) => res.json())
+      //   .then((data) => {
+      //     console.log(data);
 
-          document_id.current = data.id as string;
-        })
-        .catch((error) => {
-          console.error("Error saving document:", error);
-        });
+      //     document_id.current = data.id as string;
+      //   })
+      //   .catch((error) => {
+      //     console.error("Error saving document:", error);
+      //   });
 
       resetCanvasVariables();
     })
-    .enabled(drawingMode === "draw")
-    .runOnJS(true);
+    .enabled(drawingMode === "draw");
 
   const move = Gesture.Pan()
     .averageTouches(true)
@@ -231,35 +233,74 @@ export default function HomeScreen() {
 
   const combined = Gesture.Simultaneous(move);
 
-  // For testing
-  useEffect(() => {
-    const stateStr = localStorage.getItem("appState");
-
-    if (stateStr) {
-      const parsedData = JSON.parse(stateStr) as DocumentState;
-
-      if (!parsedData.elements) return;
-
-      const newPaths = parsedData.elements
-        .filter((el) => el.type === "path")
-        .map((el) => {
-          const pathElement = el as PathElement;
-          return {
-            ...pathElement.properties,
-            path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
-            matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
-          };
-        })
-        .filter(Boolean) as Path[];
-
-      setAppState(parsedData);
-      setPaths(newPaths);
-    }
-  }, []);
-
   const transform = useDerivedValue(() => {
     return [{ matrix: canvasMatrix.value }];
   });
+
+  // For testing
+  // useEffect(() => {
+  //   const stateStr = localStorage.getItem("appState");
+
+  //   if (stateStr) {
+  //     const parsedData = JSON.parse(stateStr) as DocumentState;
+
+  //     if (!parsedData.elements) return;
+
+  //     const newPaths = parsedData.elements
+  //       .filter((el) => el.type === "path")
+  //       .map((el) => {
+  //         const pathElement = el as PathElement;
+  //         return {
+  //           ...pathElement.properties,
+  //           path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
+  //           matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
+  //         };
+  //       })
+  //       .filter(Boolean) as Path[];
+
+  //     setAppState(parsedData);
+  //     setPaths(newPaths);
+  //   }
+  // }, []);
+
+  useEffect(() => {
+    socketRef.current = new WebSocket(
+      `ws://${SERVER_URL}/api/ws/${document_id.current}`
+    );
+
+    const socket = socketRef.current;
+
+    if (socket) {
+      socket.onmessage = (event) => {
+        const data = JSON.parse(event.data) as any; // For now
+        if (data.type === "state") {
+          const newPaths = data.state.elements
+            .filter((el: any) => el.type === "path")
+            .map((el: any) => {
+              const pathElement = el as PathElement;
+              return {
+                ...pathElement.properties,
+                path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
+                matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
+              };
+            })
+            .filter(Boolean) as Path[];
+
+          setAppState(data.state);
+          setPaths(newPaths);
+        }
+      };
+      socket.onopen = () => {
+        socket.send("setup");
+      };
+    }
+
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+    };
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

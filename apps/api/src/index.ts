@@ -2,18 +2,17 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { validator } from "hono/validator";
 import { z } from "zod";
+import { documentSchema } from "@native-hono-cf/shared";
+import { WebSocketServer } from "./durable";
+
+export { WebSocketServer } from "./durable";
 
 type Bindings = {
   DB: D1Database;
-  DURABLE_OBJECT: any;
+  DURABLE_OBJECT: DurableObjectNamespace<WebSocketServer>;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
-
-const documentSchema = z.object({
-  state: z.string(),
-  id: z.string().optional(),
-});
 
 app.use("/*", cors());
 
@@ -22,7 +21,7 @@ app.get("/documents/:id", async (c) => {
   const id = c.req.param("id");
 
   return await db
-    .prepare("SELECT * FROM documents WHERE id = ?")
+    .prepare("SELECT * FROM documents WHERE document_id = ?")
     .bind(id)
     .first()
     .then((row) => {
@@ -67,6 +66,18 @@ app.post(
   }
 );
 
-app.get("/api/ws/:documentId");
+app.get("/api/ws/:id", (c) => {
+  const document_id = c.req.param("id");
+
+  const upgradeHeader = c.req.header("Upgrade");
+  if (!upgradeHeader || upgradeHeader !== "websocket") {
+    return c.text("Expected websocket", 400);
+  }
+
+  const id = c.env.DURABLE_OBJECT.idFromName(document_id);
+  const stub = c.env.DURABLE_OBJECT.get(id);
+
+  return stub.fetch(c.req.raw);
+});
 
 export default app;

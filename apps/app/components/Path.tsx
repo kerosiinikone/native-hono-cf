@@ -44,6 +44,7 @@ const PathObject = ({
   const origin = useSharedValue({ x: 0, y: 0 });
 
   const updateOnEnd = useCallback(() => {
+    "worklet";
     updatePath(matrix.value);
   }, [savedMatrix, matrix, updatePath]);
 
