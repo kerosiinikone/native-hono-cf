@@ -4,9 +4,23 @@ enum ElementType {
   Path = "path",
 }
 
+export enum MessageType {
+  SETUP = "setup",
+  STATE = "state",
+  ERROR = "error",
+}
+
+export type WSMessage = {
+  type: MessageType;
+  payload?: string | DocumentStateUpdate;
+};
+
 export interface DocumentState {
   elements: Element[];
+  // ...
 }
+
+export type DocumentStateUpdate = Partial<DocumentState>;
 
 export interface Element {
   id: string;

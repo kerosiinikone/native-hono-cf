@@ -1,11 +1,18 @@
 import { DurableObject } from "cloudflare:workers";
-import { DocumentState } from "@native-hono-cf/shared";
+import {
+  DocumentState,
+  DocumentStateUpdate,
+  MessageType,
+  WSMessage,
+} from "@native-hono-cf/shared";
 
 export class WebSocketServer extends DurableObject {
   state: DocumentState = {
     elements: [],
   };
   db: D1Database | null = null;
+
+  // clients: Record<string, WebSocket> = {}; // Sync status?
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -21,18 +28,21 @@ export class WebSocketServer extends DurableObject {
     });
   }
 
+  // TODO: Ping / pong to keep the connection alive
+  // TODO: Zod schemas for messages and state updates
+
   async fetch(req: Request): Promise<Response> {
     const webSocketPair = new WebSocketPair();
     const [client, server] = Object.values(webSocketPair);
 
-    const url = new URL(req.url);
-    const id = (url.pathname.split("/").pop() || "") as string;
-
-    this._getInitialState(id);
-
     if (!client || !server) {
       return new Response("Fail", { status: 500 });
     }
+
+    const url = new URL(req.url);
+    const id = (url.pathname.split("/").pop() || "") as string;
+
+    this._getPersistedState(id);
 
     this.ctx.acceptWebSocket(server);
 
@@ -50,28 +60,58 @@ export class WebSocketServer extends DurableObject {
       return;
     }
 
-    if (msg === "setup") {
-      ws.send(
-        JSON.stringify({
-          type: "state",
-          state: this.state,
-        })
-      );
-      return;
-    }
+    const parsedMessage = JSON.parse(msg) as WSMessage;
 
-    ws.send(
-      `[Durable Object] State length: ${
-        this.state.elements.length
-      }, connections: ${this.ctx.getWebSockets().length}`
-    );
+    switch (parsedMessage.type) {
+      case MessageType.SETUP:
+        ws.send(
+          JSON.stringify({
+            type: MessageType.STATE,
+            payload: this.state,
+          } as WSMessage)
+        );
+        return;
+      case MessageType.STATE:
+        const stateUpdate = parsedMessage.payload as DocumentStateUpdate;
+        if (!stateUpdate.elements?.length) return;
+
+        this.broadcastStateChanges(stateUpdate);
+
+        // Couple these
+        this.state.elements = stateUpdate.elements;
+        await this.ctx.storage.put("state", JSON.stringify(this.state));
+        await this._persistState(this.state);
+
+        return;
+      default:
+        ws.send(
+          `[Durable Object] State length: ${
+            this.state.elements.length
+          }, connections: ${this.ctx.getWebSockets().length}`
+        );
+    }
   }
 
   async webSocketClose(ws: WebSocket, code: number, _: string, __: boolean) {
     ws.close(code);
   }
 
-  async _getInitialState(param: string) {
+  // Parse and stringify for no reason?
+  async broadcastStateChanges(stateUpdate: DocumentStateUpdate) {
+    for (const client of this.ctx.getWebSockets()) {
+      // TODO: Ignore the client that sent the message
+      client.send(
+        JSON.stringify({
+          type: MessageType.STATE,
+          payload: stateUpdate,
+        } as WSMessage)
+      );
+    }
+  }
+
+  async _persistState(_: DocumentState) {}
+
+  async _getPersistedState(param: string) {
     const db = this.db;
 
     if (!db) {

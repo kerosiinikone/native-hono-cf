@@ -1,5 +1,10 @@
 import { SERVER_URL } from "@/constants/server";
-import { DocumentState, PathElement } from "@native-hono-cf/shared";
+import {
+  DocumentState,
+  MessageType,
+  PathElement,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import {
   Canvas,
   Group,
@@ -62,6 +67,7 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 export default function SkiaComponent() {
   // InitPaths()
 
+  // TODO: Buffer changes to avoid constantly sending messages
   const socketRef = useRef<WebSocket | null>(null);
   let document_id = useRef("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
 
@@ -177,30 +183,14 @@ export default function SkiaComponent() {
 
       setAppState(newAppState);
 
-      localStorage.setItem("appState", JSON.stringify(newAppState));
+      socketRef.current?.send(
+        JSON.stringify({
+          type: MessageType.STATE,
+          payload: newAppState,
+        })
+      );
 
-      // To test persiting logic -> DOs handle this in the backend
-      // await fetch(`${SERVER_URL}/documents`, {
-      //   method: "POST",
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //     "Access-Control-Allow-Origin": "*",
-      //     "Access-Control-Allow-Credentials": "true",
-      //   },
-      //   body: JSON.stringify({
-      //     id: document_id.current === "" ? undefined : document_id.current,
-      //     state: JSON.stringify(newAppState),
-      //   }),
-      // })
-      //   .then((res) => res.json())
-      //   .then((data) => {
-      //     console.log(data);
-
-      //     document_id.current = data.id as string;
-      //   })
-      //   .catch((error) => {
-      //     console.error("Error saving document:", error);
-      //   });
+      // localStorage.setItem("appState", JSON.stringify(newAppState));
 
       resetCanvasVariables();
     })
@@ -217,51 +207,11 @@ export default function SkiaComponent() {
       );
     });
 
-  // const zoom = Gesture.Pinch()
-  //   .onBegin((e) => {
-  //     "worklet";
-  //     cOrigin.value = { x: e.focalX, y: e.focalY };
-  //     cSavedMatrix.value = matrix.value;
-  //   })
-  //   .onChange((e) => {
-  //     "worklet";
-  //     canvasMatrix.value = multiply4(
-  //       cSavedMatrix.value,
-  //       scale(e.scale, e.scale, 1, cOrigin.value)
-  //     );
-  //   });
-
   const combined = Gesture.Simultaneous(move);
 
   const transform = useDerivedValue(() => {
     return [{ matrix: canvasMatrix.value }];
   });
-
-  // For testing
-  // useEffect(() => {
-  //   const stateStr = localStorage.getItem("appState");
-
-  //   if (stateStr) {
-  //     const parsedData = JSON.parse(stateStr) as DocumentState;
-
-  //     if (!parsedData.elements) return;
-
-  //     const newPaths = parsedData.elements
-  //       .filter((el) => el.type === "path")
-  //       .map((el) => {
-  //         const pathElement = el as PathElement;
-  //         return {
-  //           ...pathElement.properties,
-  //           path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
-  //           matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
-  //         };
-  //       })
-  //       .filter(Boolean) as Path[];
-
-  //     setAppState(parsedData);
-  //     setPaths(newPaths);
-  //   }
-  // }, []);
 
   useEffect(() => {
     socketRef.current = new WebSocket(
@@ -272,26 +222,41 @@ export default function SkiaComponent() {
 
     if (socket) {
       socket.onmessage = (event) => {
-        const data = JSON.parse(event.data) as any; // For now
-        if (data.type === "state") {
-          const newPaths = data.state.elements
-            .filter((el: any) => el.type === "path")
-            .map((el: any) => {
-              const pathElement = el as PathElement;
-              return {
-                ...pathElement.properties,
-                path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
-                matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
-              };
-            })
-            .filter(Boolean) as Path[];
+        const data = JSON.parse(event.data) as WSMessage;
 
-          setAppState(data.state);
-          setPaths(newPaths);
+        switch (data.type) {
+          case MessageType.STATE:
+            console.log("Received state:", data.payload);
+
+            // Reset the state on the client side
+            if (data.payload && typeof data.payload !== "string") {
+              const newPaths = data.payload?.elements
+                ?.filter((el: any) => el.type === "path")
+                .map((el: any) => {
+                  const pathElement = el as PathElement;
+                  return {
+                    ...pathElement.properties,
+                    path: Skia.Path.MakeFromSVGString(
+                      pathElement.properties.path
+                    ),
+                    matrix: makeMutable(
+                      copyMatrix4(pathElement.properties.matrix)
+                    ),
+                  };
+                })
+                .filter(Boolean) as Path[];
+
+              setAppState(data.payload as DocumentState);
+              setPaths(newPaths);
+            }
         }
       };
       socket.onopen = () => {
-        socket.send("setup");
+        socket.send(
+          JSON.stringify({
+            type: MessageType.SETUP,
+          })
+        );
       };
     }
 
@@ -358,7 +323,12 @@ export default function SkiaComponent() {
 
               setAppState(newAppState);
 
-              localStorage.setItem("appState", JSON.stringify(newAppState));
+              socketRef.current?.send(
+                JSON.stringify({
+                  type: MessageType.STATE,
+                  payload: newAppState,
+                } as WSMessage)
+              );
             }}
           />
         ))}
@@ -412,7 +382,14 @@ export default function SkiaComponent() {
             };
 
             setAppState(newAppState);
-            localStorage.setItem("appState", JSON.stringify(newAppState));
+
+            socketRef.current?.send(
+              JSON.stringify({
+                type: MessageType.STATE,
+                payload: newAppState,
+              } as WSMessage)
+            );
+
             resetCanvasVariables();
           }}
         />
@@ -420,3 +397,26 @@ export default function SkiaComponent() {
     </GestureHandlerRootView>
   );
 }
+
+// To test persiting logic -> DOs handle this in the backend
+// await fetch(`${SERVER_URL}/documents`, {
+//   method: "POST",
+//   headers: {
+//     "Content-Type": "application/json",
+//     "Access-Control-Allow-Origin": "*",
+//     "Access-Control-Allow-Credentials": "true",
+//   },
+//   body: JSON.stringify({
+//     id: document_id.current === "" ? undefined : document_id.current,
+//     state: JSON.stringify(newAppState),
+//   }),
+// })
+//   .then((res) => res.json())
+//   .then((data) => {
+//     console.log(data);
+
+//     document_id.current = data.id as string;
+//   })
+//   .catch((error) => {
+//     console.error("Error saving document:", error);
+//   });
