@@ -43,6 +43,8 @@ type Path = {
   matrix: SharedValue<Matrix4>;
 };
 
+const BUFFER_INTERVAL = 100; // milliseconds
+
 function copyMatrix4(m: Matrix4): Matrix4 {
   return [
     m[0],
@@ -69,7 +71,10 @@ export default function SkiaComponent() {
 
   // TODO: Buffer changes to avoid constantly sending messages
   const socketRef = useRef<WebSocket | null>(null);
-  let document_id = useRef("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
+  const documentId = useRef<string>("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
+
+  // Used for buffering events at a given interval
+  const bufferedEvents = useRef<any[]>([]);
 
   const path = Skia.Path.Make();
 
@@ -168,7 +173,7 @@ export default function SkiaComponent() {
       setPaths([...paths, newPath]);
 
       const newPathElement = {
-        id: Math.random().toString(36).substring(2, 9), // crypto.randomUUID(),
+        id: crypto.randomUUID(),
         type: "path",
         properties: {
           ...newPath,
@@ -183,14 +188,17 @@ export default function SkiaComponent() {
 
       setAppState(newAppState);
 
-      socketRef.current?.send(
-        JSON.stringify({
-          type: MessageType.STATE,
-          payload: newAppState,
-        })
-      );
+      bufferedEvents.current.push({
+        type: MessageType.STATE,
+        payload: newAppState,
+      });
 
-      // localStorage.setItem("appState", JSON.stringify(newAppState));
+      // socketRef.current?.send(
+      //   JSON.stringify({
+      //     type: MessageType.STATE,
+      //     payload: newAppState,
+      //   })
+      // );
 
       resetCanvasVariables();
     })
@@ -215,7 +223,7 @@ export default function SkiaComponent() {
 
   useEffect(() => {
     socketRef.current = new WebSocket(
-      `ws://${SERVER_URL}/api/ws/${document_id.current}`
+      `ws://${SERVER_URL}/api/ws/${documentId.current}`
     );
 
     const socket = socketRef.current;
@@ -226,9 +234,6 @@ export default function SkiaComponent() {
 
         switch (data.type) {
           case MessageType.STATE:
-            console.log("Received state:", data.payload);
-
-            // Reset the state on the client side
             if (data.payload && typeof data.payload !== "string") {
               const newPaths = data.payload?.elements
                 ?.filter((el: any) => el.type === "path")
@@ -264,6 +269,23 @@ export default function SkiaComponent() {
       if (socket) {
         socket.close();
       }
+    };
+  }, []);
+
+  // Buffer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (bufferedEvents.current.length > 0) {
+        const event = bufferedEvents.current.pop();
+        if (event) {
+          socketRef.current?.send(JSON.stringify(event));
+        }
+        bufferedEvents.current = [];
+      }
+    }, BUFFER_INTERVAL);
+
+    return () => {
+      clearInterval(interval);
     };
   }, []);
 
@@ -323,12 +345,17 @@ export default function SkiaComponent() {
 
               setAppState(newAppState);
 
-              socketRef.current?.send(
-                JSON.stringify({
-                  type: MessageType.STATE,
-                  payload: newAppState,
-                } as WSMessage)
-              );
+              bufferedEvents.current.push({
+                type: MessageType.STATE,
+                payload: newAppState,
+              });
+
+              // socketRef.current?.send(
+              //   JSON.stringify({
+              //     type: MessageType.STATE,
+              //     payload: newAppState,
+              //   } as WSMessage)
+              // );
             }}
           />
         ))}
@@ -373,6 +400,7 @@ export default function SkiaComponent() {
         <Button
           title="Undo"
           onPress={() => {
+            // TODO: Only pop the updates that the client has made itself
             setPaths(paths.slice(0, paths.length - 1));
             const newAppState = {
               elements: appState.elements.slice(
@@ -383,12 +411,17 @@ export default function SkiaComponent() {
 
             setAppState(newAppState);
 
-            socketRef.current?.send(
-              JSON.stringify({
-                type: MessageType.STATE,
-                payload: newAppState,
-              } as WSMessage)
-            );
+            bufferedEvents.current.push({
+              type: MessageType.STATE,
+              payload: newAppState,
+            });
+
+            // socketRef.current?.send(
+            //   JSON.stringify({
+            //     type: MessageType.STATE,
+            //     payload: newAppState,
+            //   } as WSMessage)
+            // );
 
             resetCanvasVariables();
           }}

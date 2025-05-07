@@ -3,16 +3,19 @@ import {
   DocumentState,
   DocumentStateUpdate,
   MessageType,
+  webSocketMessageSchema,
+  WebSocketMessageSchema,
   WSMessage,
 } from "@native-hono-cf/shared";
 
 export class WebSocketServer extends DurableObject {
+  private clients: Map<WebSocket, string> = new Map();
+  private id: string | null = null;
+
   state: DocumentState = {
     elements: [],
   };
   db: D1Database | null = null;
-
-  // clients: Record<string, WebSocket> = {}; // Sync status?
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
     super(ctx, env);
@@ -22,14 +25,16 @@ export class WebSocketServer extends DurableObject {
 
       const savedState = (await ctx.storage.get("state")) as string | null;
 
+      this.id = (await ctx.storage.get("id")) as string | null;
+
       if (savedState) {
         this.state = JSON.parse(savedState) as DocumentState;
       }
     });
   }
 
-  // TODO: Ping / pong to keep the connection alive
   // TODO: Zod schemas for messages and state updates
+  // TODO: Ping / pong to keep the connection alive
 
   async fetch(req: Request): Promise<Response> {
     const webSocketPair = new WebSocketPair();
@@ -39,12 +44,20 @@ export class WebSocketServer extends DurableObject {
       return new Response("Fail", { status: 500 });
     }
 
+    const clientId = crypto.randomUUID();
+    this.clients.set(server, clientId);
+
+    this.ctx.acceptWebSocket(server);
+
     const url = new URL(req.url);
     const id = (url.pathname.split("/").pop() || "") as string;
 
-    this._getPersistedState(id);
+    if (!this.id) {
+      this.id = id;
+      await this.ctx.storage.put("id", id);
+    }
 
-    this.ctx.acceptWebSocket(server);
+    this._getPersistedState(id);
 
     return new Response(null, {
       status: 101,
@@ -60,9 +73,17 @@ export class WebSocketServer extends DurableObject {
       return;
     }
 
-    const parsedMessage = JSON.parse(msg) as WSMessage;
+    const parsedMessage = JSON.parse(msg);
+    const wsMessage = webSocketMessageSchema.safeParse(parsedMessage);
 
-    switch (parsedMessage.type) {
+    if (!wsMessage.success) {
+      console.error("Invalid message", wsMessage.error);
+      return;
+    }
+
+    const { type, payload } = wsMessage.data as WebSocketMessageSchema;
+
+    switch (type) {
       case MessageType.SETUP:
         ws.send(
           JSON.stringify({
@@ -72,15 +93,16 @@ export class WebSocketServer extends DurableObject {
         );
         return;
       case MessageType.STATE:
-        const stateUpdate = parsedMessage.payload as DocumentStateUpdate;
+        const stateUpdate = payload as DocumentStateUpdate;
         if (!stateUpdate.elements?.length) return;
 
-        this.broadcastStateChanges(stateUpdate);
+        const senderClientId = this.clients.get(ws);
+        this.broadcastStateChanges(msg, senderClientId);
 
         // Couple these
         this.state.elements = stateUpdate.elements;
         await this.ctx.storage.put("state", JSON.stringify(this.state));
-        await this._persistState(this.state);
+        await this._persistState();
 
         return;
       default:
@@ -96,20 +118,37 @@ export class WebSocketServer extends DurableObject {
     ws.close(code);
   }
 
-  // Parse and stringify for no reason?
-  async broadcastStateChanges(stateUpdate: DocumentStateUpdate) {
-    for (const client of this.ctx.getWebSockets()) {
-      // TODO: Ignore the client that sent the message
-      client.send(
-        JSON.stringify({
-          type: MessageType.STATE,
-          payload: stateUpdate,
-        } as WSMessage)
-      );
+  async broadcastStateChanges(stateUpdateMsg: string, senderId?: string) {
+    for (const [client, clientId] of this.clients.entries()) {
+      if (clientId !== senderId) {
+        client.send(stateUpdateMsg);
+      }
     }
   }
 
-  async _persistState(_: DocumentState) {}
+  async _persistState() {
+    const db = this.db;
+
+    if (!db) {
+      console.error("Database not initialized");
+      return;
+    }
+
+    if (!this.state) {
+      console.error("No state to persist");
+      return;
+    }
+
+    await db
+      .prepare(
+        "INSERT INTO documents (document_id, state) VALUES (?, ?) ON CONFLICT(document_id) DO UPDATE SET state = ?"
+      )
+      .bind(this.ctx.id, JSON.stringify(this.state), JSON.stringify(this.state))
+      .run()
+      .catch((err) => {
+        console.error("Error persisting state", err);
+      });
+  }
 
   async _getPersistedState(param: string) {
     const db = this.db;

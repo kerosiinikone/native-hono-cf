@@ -55,6 +55,9 @@ const PathObject = ({
         translate(e.changeX, e.changeY, 0),
         matrix.value
       );
+
+      // Add buffering here to avoid too many updates
+      updatePath(matrix.value);
     })
     .onEnd(updateOnEnd);
 

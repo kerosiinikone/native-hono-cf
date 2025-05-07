@@ -8,10 +8,13 @@ export enum MessageType {
   SETUP = "setup",
   STATE = "state",
   ERROR = "error",
+  PING = "ping",
+  PONG = "pong",
 }
 
 export type WSMessage = {
   type: MessageType;
+  senderId?: string;
   payload?: string | DocumentStateUpdate;
 };
 
