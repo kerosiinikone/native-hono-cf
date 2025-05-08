@@ -14,7 +14,7 @@ import {
   Skia,
   SkPath,
 } from "@shopify/react-native-skia";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, View } from "react-native";
 import {
   Gesture,
@@ -29,6 +29,9 @@ import {
 } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 import PathObject from "./Path";
+import { CanvasPointerMode } from "./ui/CanvasPointerMode";
+import Toolbar from "./ui/Toolbar";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 type DrawingMode = "draw" | "select" | "move";
 
@@ -69,12 +72,35 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 export default function SkiaComponent() {
   // InitPaths()
 
-  const socketRef = useRef<WebSocket | null>(null);
   const documentId = useRef<string>("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
-  const bufferedEvents = useRef<WSMessage[]>([]);
+
+  // Central state lib later
+  const setDocumentState = useCallback(
+    (state: DocumentState) => {
+      const newPaths = state.elements
+        ?.filter((el: any) => el.type === "path")
+        .map((el: any) => {
+          const pathElement = el as PathElement;
+          return {
+            ...pathElement.properties,
+            path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
+            matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
+          };
+        })
+        .filter(Boolean) as Path[];
+
+      setAppState(state);
+      setPaths(newPaths);
+    },
+    [documentId]
+  );
+
+  const ws = useWebSocket({
+    documentId: documentId.current,
+    onStateReceived: setDocumentState, // better state management?
+  });
 
   const path = Skia.Path.Make();
-
   const currentPath = useSharedValue(path);
   const matrix = useSharedValue(Matrix4());
   const canvasMatrix = useSharedValue(Matrix4());
@@ -185,7 +211,7 @@ export default function SkiaComponent() {
 
       setAppState(newAppState);
 
-      bufferedEvents.current.push({
+      ws.bufferMessage({
         type: MessageType.STATE,
         payload: newAppState,
       });
@@ -211,73 +237,22 @@ export default function SkiaComponent() {
     return [{ matrix: canvasMatrix.value }];
   });
 
-  useEffect(() => {
-    socketRef.current = new WebSocket(
-      `ws://${SERVER_URL}/api/ws/${documentId.current}`
-    );
-
-    const socket = socketRef.current;
-
-    if (socket) {
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data) as WSMessage;
-
-        switch (data.type) {
-          case MessageType.STATE:
-            if (data.payload && typeof data.payload !== "string") {
-              const newPaths = data.payload?.elements
-                ?.filter((el: any) => el.type === "path")
-                .map((el: any) => {
-                  const pathElement = el as PathElement;
-                  return {
-                    ...pathElement.properties,
-                    path: Skia.Path.MakeFromSVGString(
-                      pathElement.properties.path
-                    ),
-                    matrix: makeMutable(
-                      copyMatrix4(pathElement.properties.matrix)
-                    ),
-                  };
-                })
-                .filter(Boolean) as Path[];
-
-              setAppState(data.payload as DocumentState);
-              setPaths(newPaths);
-            }
-        }
-      };
-      socket.onopen = () => {
-        socket.send(
-          JSON.stringify({
-            type: MessageType.SETUP,
-          })
-        );
-      };
-    }
-
-    return () => {
-      if (socket) {
-        socket.close();
-      }
+  const undo = () => {
+    // TODO: Only pop the updates that the client has made itself
+    setPaths(paths.slice(0, paths.length - 1));
+    const newAppState = {
+      elements: appState.elements.slice(0, appState.elements.length - 1),
     };
-  }, []);
 
-  // Buffer
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (bufferedEvents.current.length > 0) {
-        const event = bufferedEvents.current.pop();
-        if (event) {
-          socketRef.current?.send(JSON.stringify(event));
-        }
-        bufferedEvents.current = [];
-      }
-    }, BUFFER_INTERVAL);
+    setAppState(newAppState);
 
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
+    ws.bufferMessage({
+      type: MessageType.STATE,
+      payload: newAppState,
+    });
+
+    resetCanvasVariables();
+  };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -335,74 +310,19 @@ export default function SkiaComponent() {
 
               setAppState(newAppState);
 
-              bufferedEvents.current.push({
+              ws.bufferMessage({
                 type: MessageType.STATE,
                 payload: newAppState,
               });
             }}
           />
         ))}
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          flexDirection: "row",
-          justifyContent: "space-around",
-          alignItems: "center",
-          backgroundColor: "rgba(200, 200, 200, 0.8)",
-          paddingVertical: 8,
-          paddingHorizontal: 10,
-          zIndex: 1,
-          top: 0,
-          borderBottomWidth: 1,
-          borderBottomColor: "#ccc",
-        }}
-      >
-        <Button title="Draw" onPress={() => setDrawingMode("draw")} />
-        <Button title="Move" onPress={() => setDrawingMode("move")} />
-        <Button title="Select" onPress={() => setDrawingMode("select")} />
-      </View>
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          flexDirection: "row",
-          justifyContent: "space-around",
-          alignItems: "center",
-          backgroundColor: "rgba(200, 200, 200, 0.8)",
-          paddingVertical: 8,
-          paddingHorizontal: 10,
-          zIndex: 1,
-          bottom: 0,
-          borderTopWidth: 1,
-          borderTopColor: "#ccc",
-        }}
-      >
-        <Button
-          title="Undo"
-          onPress={() => {
-            // TODO: Only pop the updates that the client has made itself
-            setPaths(paths.slice(0, paths.length - 1));
-            const newAppState = {
-              elements: appState.elements.slice(
-                0,
-                appState.elements.length - 1
-              ),
-            };
-
-            setAppState(newAppState);
-
-            bufferedEvents.current.push({
-              type: MessageType.STATE,
-              payload: newAppState,
-            });
-
-            resetCanvasVariables();
-          }}
-        />
-      </View>
+      <CanvasPointerMode
+        setModeDraw={() => setDrawingMode("draw")}
+        setModeMove={() => setDrawingMode("move")}
+        setModeSelect={() => setDrawingMode("select")}
+      />
+      <Toolbar undo={undo} />
     </GestureHandlerRootView>
   );
 }
