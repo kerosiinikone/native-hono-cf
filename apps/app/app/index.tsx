@@ -5,8 +5,8 @@ export default function HomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       <WithSkiaWeb
-        getComponent={() => import("@/components/Skia")}
-        fallback={<Text>Loading canvas...</Text>}
+        getComponent={() => require("@/components/Skia")}
+        fallback={<Text>Loading canvas...</Text>} // Spinner or placeholder while loading
       />
     </View>
   );

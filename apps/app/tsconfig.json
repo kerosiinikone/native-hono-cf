@@ -3,6 +3,7 @@
   "strict": false,
   "compilerOptions": {
     "jsx": "react-native",
+    "moduleResolution": "node16",
     "paths": {
       "@native-hono-cf/shared": ["../../packages/shared/src"],
       "@/*": ["./*"]

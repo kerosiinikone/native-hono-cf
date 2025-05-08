@@ -43,7 +43,7 @@ type Path = {
   matrix: SharedValue<Matrix4>;
 };
 
-const BUFFER_INTERVAL = 100; // milliseconds
+const BUFFER_INTERVAL = 100;
 
 function copyMatrix4(m: Matrix4): Matrix4 {
   return [
@@ -69,12 +69,9 @@ function copyMatrix4(m: Matrix4): Matrix4 {
 export default function SkiaComponent() {
   // InitPaths()
 
-  // TODO: Buffer changes to avoid constantly sending messages
   const socketRef = useRef<WebSocket | null>(null);
   const documentId = useRef<string>("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
-
-  // Used for buffering events at a given interval
-  const bufferedEvents = useRef<any[]>([]);
+  const bufferedEvents = useRef<WSMessage[]>([]);
 
   const path = Skia.Path.Make();
 
@@ -192,13 +189,6 @@ export default function SkiaComponent() {
         type: MessageType.STATE,
         payload: newAppState,
       });
-
-      // socketRef.current?.send(
-      //   JSON.stringify({
-      //     type: MessageType.STATE,
-      //     payload: newAppState,
-      //   })
-      // );
 
       resetCanvasVariables();
     })
@@ -349,13 +339,6 @@ export default function SkiaComponent() {
                 type: MessageType.STATE,
                 payload: newAppState,
               });
-
-              // socketRef.current?.send(
-              //   JSON.stringify({
-              //     type: MessageType.STATE,
-              //     payload: newAppState,
-              //   } as WSMessage)
-              // );
             }}
           />
         ))}
@@ -416,13 +399,6 @@ export default function SkiaComponent() {
               payload: newAppState,
             });
 
-            // socketRef.current?.send(
-            //   JSON.stringify({
-            //     type: MessageType.STATE,
-            //     payload: newAppState,
-            //   } as WSMessage)
-            // );
-
             resetCanvasVariables();
           }}
         />
@@ -430,26 +406,3 @@ export default function SkiaComponent() {
     </GestureHandlerRootView>
   );
 }
-
-// To test persiting logic -> DOs handle this in the backend
-// await fetch(`${SERVER_URL}/documents`, {
-//   method: "POST",
-//   headers: {
-//     "Content-Type": "application/json",
-//     "Access-Control-Allow-Origin": "*",
-//     "Access-Control-Allow-Credentials": "true",
-//   },
-//   body: JSON.stringify({
-//     id: document_id.current === "" ? undefined : document_id.current,
-//     state: JSON.stringify(newAppState),
-//   }),
-// })
-//   .then((res) => res.json())
-//   .then((data) => {
-//     console.log(data);
-
-//     document_id.current = data.id as string;
-//   })
-//   .catch((error) => {
-//     console.error("Error saving document:", error);
-//   });
