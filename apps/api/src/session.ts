@@ -2,9 +2,11 @@ import {
   DocumentState,
   DocumentStateUpdate,
   MessageType,
+  MessageCommand,
   webSocketMessageSchema,
   WebSocketMessageSchema,
   WSMessage,
+  Element,
 } from "@native-hono-cf/shared";
 import { D1Persistence, DocumentStorage } from "./persistence";
 
@@ -76,6 +78,7 @@ export class DocumentSession {
 
     try {
       const parsedMessage = JSON.parse(message as string);
+
       const wsMessageValidation =
         webSocketMessageSchema.safeParse(parsedMessage);
 
@@ -87,13 +90,14 @@ export class DocumentSession {
         ws.send(
           JSON.stringify({
             type: MessageType.ERROR,
-            payload: { message: "Invalid message format." },
+            method: MessageCommand.INFO,
+            payload: "Invalid message format.",
           } as WSMessage)
         );
         return;
       }
 
-      const { type, payload } =
+      const { type, payload, method } =
         wsMessageValidation.data as WebSocketMessageSchema;
 
       switch (type) {
@@ -101,23 +105,71 @@ export class DocumentSession {
           ws.send(
             JSON.stringify({
               type: MessageType.STATE,
-              payload: this.state,
+              method: MessageCommand.ADD,
+              payload: this.state.elements,
             } as WSMessage)
           );
           break;
         case MessageType.STATE:
-          // Granularity in the future?
           const stateUpdate = payload as DocumentStateUpdate;
-          if (stateUpdate.elements) {
-            this.state = { ...this.state, elements: stateUpdate.elements };
-          } else {
+          if (!stateUpdate) {
             console.warn(
               "[DocumentSession] Received STATE update without elements."
             );
             this.state = Object.assign(this.state, stateUpdate);
           }
+          switch (method) {
+            case MessageCommand.DELETE:
+              this.state.elements = this.state.elements.filter(
+                (element) => element.id !== (stateUpdate as Element).id
+              );
+              break;
+            case MessageCommand.UPDATE:
+              const updatePayload = stateUpdate as Element;
+              const elementIdToUpdate = updatePayload.id;
 
-          this.broadcast(message, this.clientMap.get(ws));
+              let found = false;
+              this.state.elements = this.state.elements.map((element) => {
+                if (element.id === elementIdToUpdate) {
+                  found = true;
+                  return {
+                    ...element,
+                    properties: {
+                      ...element.properties,
+                      ...updatePayload.properties,
+                    },
+                  };
+                }
+                return element;
+              });
+
+              if (!found) {
+                console.warn(
+                  `[DocumentSession] Element with ID '${elementIdToUpdate}' not found. No update performed on elements array.`
+                );
+              }
+              break;
+            case MessageCommand.ADD:
+              this.state.elements = this.state.elements.concat(
+                [stateUpdate].flat()
+              );
+              break;
+            default:
+              console.warn(
+                "[DocumentSession] Unknown method for STATE update:",
+                method
+              );
+              ws.send(
+                JSON.stringify({
+                  type: MessageType.ERROR,
+                  method: MessageCommand.INFO,
+                  payload: `Unknown method for STATE update: ${method}`,
+                } as WSMessage)
+              );
+              return;
+          }
+
+          this.broadcast(this.clientMap.get(ws));
           this.persistState();
           break;
         default:
@@ -125,7 +177,8 @@ export class DocumentSession {
           ws.send(
             JSON.stringify({
               type: MessageType.ERROR,
-              payload: { message: `Received: ${type}` },
+              method: MessageCommand.INFO,
+              payload: `Received: ${type}`,
             } as WSMessage)
           );
       }
@@ -134,17 +187,24 @@ export class DocumentSession {
       ws.send(
         JSON.stringify({
           type: MessageType.ERROR,
-          payload: { message: "Error processing message." },
+          method: MessageCommand.INFO,
+          payload: "Error processing message.",
         } as WSMessage)
       );
     }
   }
 
-  private broadcast(message: string, senderId?: string): void {
+  private broadcast(senderId?: string): void {
     this.clientMap.forEach((clientId, ws) => {
       if (ws.readyState === WebSocket.OPEN && clientId !== senderId) {
         try {
-          ws.send(message);
+          // Write a JSON wrapper for WS messages
+          ws.send(
+            JSON.stringify({
+              type: MessageType.STATE,
+              payload: this.state.elements,
+            })
+          );
         } catch (e) {
           console.error(
             `[DocumentSession] Error sending message to ${clientId}:`,

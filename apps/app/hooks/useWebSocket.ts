@@ -1,12 +1,17 @@
 import { SERVER_URL } from "@/constants/server";
-import { DocumentState, MessageType, WSMessage } from "@native-hono-cf/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Element,
+  MessageCommand,
+  MessageType,
+  WSMessage,
+} from "@native-hono-cf/shared";
+import { useCallback, useEffect, useRef } from "react";
 
 const BUFFER_INTERVAL = 100;
 
 interface UseWebSocketOptions {
   documentId: string | null;
-  onStateReceived: (state: DocumentState) => void;
+  onStateReceived: (state: Element[]) => void;
   onError?: (error: Event) => void;
 }
 
@@ -29,7 +34,7 @@ export function useWebSocket({
         try {
           socketRef.current.send(JSON.stringify(messageToSend));
         } catch (e) {
-          console.error("Error sending buffered message:", e);
+          console.error("Error sending buffered message:", e, messageToSend);
         }
       }
       if (
@@ -41,14 +46,19 @@ export function useWebSocket({
       }
       bufferedMessages.current = [];
     }
-  }, []);
+  }, [documentId]);
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${SERVER_URL}/api/ws/${documentId}`);
     socketRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: MessageType.SETUP } as WSMessage));
+      ws.send(
+        JSON.stringify({
+          type: MessageType.SETUP,
+          method: MessageCommand.INFO,
+        } as WSMessage)
+      );
 
       sendBufferIntervalRef.current = setInterval(
         sendBufferedMessages,
@@ -60,13 +70,12 @@ export function useWebSocket({
       try {
         const data = JSON.parse(event.data as string) as WSMessage;
 
-        const stateMessage =
+        if (
           data.type === MessageType.STATE &&
           data.payload &&
-          typeof data.payload !== "string";
-
-        if (stateMessage) {
-          onStateReceived(data.payload as DocumentState);
+          typeof data.payload !== "string"
+        ) {
+          onStateReceived([data.payload].flat());
         }
       } catch (e) {
         console.error("Error processing WebSocket message:", e);
@@ -103,15 +112,18 @@ export function useWebSocket({
     };
   }, [documentId]);
 
-  const bufferMessage = (msg: WSMessage) => {
-    if (sendBufferIntervalRef.current == null) {
-      sendBufferIntervalRef.current = setInterval(
-        sendBufferedMessages,
-        BUFFER_INTERVAL
-      );
-    }
-    bufferedMessages.current.push(msg);
+  return {
+    bufferMessage: useCallback(
+      (msg: WSMessage) => {
+        if (sendBufferIntervalRef.current == null) {
+          sendBufferIntervalRef.current = setInterval(
+            sendBufferedMessages,
+            BUFFER_INTERVAL
+          );
+        }
+        bufferedMessages.current.push(msg);
+      },
+      [documentId]
+    ),
   };
-
-  return { bufferMessage };
 }

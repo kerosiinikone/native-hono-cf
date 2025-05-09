@@ -1,10 +1,11 @@
-import { SERVER_URL } from "@/constants/server";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import {
-  DocumentState,
-  MessageType,
-  PathElement,
-  WSMessage,
-} from "@native-hono-cf/shared";
+  ClientPathElement,
+  DrawingMode,
+  transferClientPathToServer,
+  useDocumentStore,
+} from "@/state/store";
+import { MessageCommand, MessageType } from "@native-hono-cf/shared";
 import {
   Canvas,
   Group,
@@ -12,10 +13,8 @@ import {
   notifyChange,
   Path,
   Skia,
-  SkPath,
 } from "@shopify/react-native-skia";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, View } from "react-native";
+import { useCallback, useState } from "react";
 import {
   Gesture,
   GestureDetector,
@@ -31,79 +30,31 @@ import { multiply4, translate } from "react-native-redash";
 import PathObject from "./Path";
 import { CanvasPointerMode } from "./ui/CanvasPointerMode";
 import Toolbar from "./ui/Toolbar";
-import { useWebSocket } from "@/hooks/useWebSocket";
-
-type DrawingMode = "draw" | "select" | "move";
-
-type Path = {
-  path: SkPath;
-  x: number;
-  y: number;
-  focalX: number;
-  focalY: number;
-  width: number;
-  height: number;
-  matrix: SharedValue<Matrix4>;
-};
-
-const BUFFER_INTERVAL = 100;
-
-function copyMatrix4(m: Matrix4): Matrix4 {
-  return [
-    m[0],
-    m[1],
-    m[2],
-    m[3],
-    m[4],
-    m[5],
-    m[6],
-    m[7],
-    m[8],
-    m[9],
-    m[10],
-    m[11],
-    m[12],
-    m[13],
-    m[14],
-    m[15],
-  ];
-}
 
 export default function SkiaComponent() {
   // InitPaths()
 
-  const documentId = useRef<string>("289d4f3c-3617-45cb-a696-15ed24386388"); // Test value
+  const {
+    documentId,
+    setLocalFromServerState,
+    canvasMatrix,
+    elements,
+    addElement,
+    updateElementMatrix,
+    removeElement,
+  } = useDocumentStore((state) => state);
 
   // Central state lib later
-  const setDocumentState = useCallback(
-    (state: DocumentState) => {
-      const newPaths = state.elements
-        ?.filter((el: any) => el.type === "path")
-        .map((el: any) => {
-          const pathElement = el as PathElement;
-          return {
-            ...pathElement.properties,
-            path: Skia.Path.MakeFromSVGString(pathElement.properties.path),
-            matrix: makeMutable(copyMatrix4(pathElement.properties.matrix)),
-          };
-        })
-        .filter(Boolean) as Path[];
-
-      setAppState(state);
-      setPaths(newPaths);
-    },
-    [documentId]
-  );
+  const setDocumentState = useCallback(setLocalFromServerState, [documentId]);
 
   const ws = useWebSocket({
-    documentId: documentId.current,
-    onStateReceived: setDocumentState, // better state management?
+    documentId: documentId,
+    onStateReceived: setDocumentState,
   });
 
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
   const matrix = useSharedValue(Matrix4());
-  const canvasMatrix = useSharedValue(Matrix4());
   const currentPathDimensions = useSharedValue({
     xup: 0,
     xdown: 0,
@@ -111,8 +62,6 @@ export default function SkiaComponent() {
     ydown: 0,
   });
 
-  const [appState, setAppState] = useState<DocumentState>({ elements: [] });
-  const [paths, setPaths] = useState<Path[]>([]);
   const [drawingMode, setDrawingMode] = useState<DrawingMode>("draw");
 
   const resetCanvasVariables = () => {
@@ -193,27 +142,15 @@ export default function SkiaComponent() {
         ),
       };
 
-      setPaths([...paths, newPath]);
-
-      const newPathElement = {
-        id: crypto.randomUUID(),
-        type: "path",
-        properties: {
-          ...newPath,
-          path: newPath.path.toSVGString(),
-          matrix: newPath.matrix.value,
-        },
-      } as PathElement;
-
-      const newAppState = {
-        elements: appState.elements.concat([newPathElement]),
-      } as DocumentState;
-
-      setAppState(newAppState);
+      const newElement = addElement({
+        ...newPath,
+        matrix: newPath.matrix,
+      });
 
       ws.bufferMessage({
         type: MessageType.STATE,
-        payload: newAppState,
+        method: MessageCommand.ADD,
+        payload: transferClientPathToServer(newElement),
       });
 
       resetCanvasVariables();
@@ -239,16 +176,18 @@ export default function SkiaComponent() {
 
   const undo = () => {
     // TODO: Only pop the updates that the client has made itself
-    setPaths(paths.slice(0, paths.length - 1));
-    const newAppState = {
-      elements: appState.elements.slice(0, appState.elements.length - 1),
-    };
+    if (!elements.length) return;
 
-    setAppState(newAppState);
+    const lastElement = removeElement(
+      (elements[elements.length - 1] as ClientPathElement).id
+    );
+
+    if (!lastElement) return;
 
     ws.bufferMessage({
       type: MessageType.STATE,
-      payload: newAppState,
+      method: MessageCommand.DELETE,
+      payload: transferClientPathToServer(lastElement),
     });
 
     resetCanvasVariables();
@@ -259,11 +198,11 @@ export default function SkiaComponent() {
       <GestureDetector gesture={drawingMode === "draw" ? draw : combined}>
         <Canvas style={{ height: "100%" }}>
           <Group transform={transform}>
-            {paths.map((path, i) => (
+            {elements.map((el, i) => (
               <Path
                 key={i}
-                path={path.path}
-                matrix={path.matrix}
+                path={el.properties.path}
+                matrix={el.properties.matrix}
                 style="stroke"
                 strokeWidth={5}
                 strokeCap="round"
@@ -281,38 +220,25 @@ export default function SkiaComponent() {
         </Canvas>
       </GestureDetector>
       {drawingMode === "select" &&
-        paths.map((path, i) => (
+        elements.map((el, i) => (
           <PathObject
             key={i}
-            x={path.x}
-            y={path.y}
-            focalX={path.focalX}
-            focalY={path.focalY}
-            width={path.width}
+            x={el.properties.x}
+            y={el.properties.y}
+            focalX={el.properties.focalX}
+            focalY={el.properties.focalY}
+            width={el.properties.width}
             canvasMatrix={canvasMatrix}
-            height={path.height}
-            matrix={path.matrix}
+            height={el.properties.height}
+            matrix={el.properties.matrix}
             updatePath={(params: Matrix4) => {
-              const newAppState = {
-                elements: appState.elements.map((el, j) => {
-                  if (j === i) {
-                    return {
-                      ...el,
-                      properties: {
-                        ...el.properties,
-                        matrix: params,
-                      },
-                    };
-                  }
-                  return el;
-                }),
-              } as DocumentState;
+              updateElementMatrix(el.id, params);
 
-              setAppState(newAppState);
-
+              // Laggy?
               ws.bufferMessage({
                 type: MessageType.STATE,
-                payload: newAppState,
+                method: MessageCommand.UPDATE,
+                payload: transferClientPathToServer(el),
               });
             }}
           />
