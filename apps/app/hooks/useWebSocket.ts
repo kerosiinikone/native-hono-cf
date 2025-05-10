@@ -7,13 +7,18 @@ import {
 } from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef } from "react";
 
-const BUFFER_INTERVAL = 100;
+const BUFFER_INTERVAL = 250;
 
 interface UseWebSocketOptions {
   documentId: string | null;
   onStateReceived: (state: Element[]) => void;
   onError?: (error: Event) => void;
 }
+
+// TODO: Make sure this logic runs on the JS side
+// and does not interfere with the Skia thread to minize
+// performance issues when there are many messa
+// and path elements
 
 export function useWebSocket({
   documentId,

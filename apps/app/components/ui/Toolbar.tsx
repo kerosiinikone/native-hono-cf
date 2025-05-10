@@ -28,7 +28,7 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
 
   return (
     <View style={styles.container}>
-      <Button title="Undo" onPress={undoPath} />
+      <Button title="Undo" color="rgba(243, 33, 33, 1)" onPress={undoPath} />
     </View>
   );
 }
@@ -48,5 +48,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderTopWidth: 1,
     borderTopColor: "#ccc",
+  },
+  button: {
+    backgroundColor: "#007BFF",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 5,
   },
 });

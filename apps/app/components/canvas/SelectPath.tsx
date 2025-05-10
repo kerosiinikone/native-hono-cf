@@ -1,3 +1,6 @@
+import useTransformGestures, {
+  multiply,
+} from "@/features/hooks/useTransformGestures";
 import {
   convertToAffineMatrix,
   convertToColumnMajor,
@@ -14,12 +17,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
-const multiply = (...matrices: Matrix4[]) => {
-  "worklet";
-  return matrices.reduce((acc, matrix) => multiply4(acc, matrix), Matrix4());
-};
-
-const PathObject = ({
+export default function SelectPath({
   matrix,
   x,
   y,
@@ -39,65 +37,13 @@ const PathObject = ({
   width: number;
   height: number;
   updatePath: (params: Matrix4) => void;
-}) => {
-  const savedMatrix = useSharedValue(Matrix4());
-  const origin = useSharedValue({ x: 0, y: 0 });
-
-  const updateOnEnd = useCallback(() => {
-    "worklet";
-    updatePath(matrix.value);
-  }, [savedMatrix, matrix, updatePath]);
-
-  const pan = Gesture.Pan()
-    .onChange((e) => {
-      "worklet";
-      matrix.value = multiply4(
-        translate(e.changeX, e.changeY, 0),
-        matrix.value
-      );
-
-      // Add buffering here to avoid too many updates
-      updatePath(matrix.value);
-    })
-    .onEnd(updateOnEnd);
-
-  const rotate = Gesture.Rotation()
-    .onBegin(() => {
-      "worklet";
-      origin.value = {
-        x: focalX,
-        y: focalY,
-      };
-      savedMatrix.value = matrix.value;
-    })
-    .onChange((e) => {
-      "worklet";
-      matrix.value = multiply4(
-        savedMatrix.value,
-        rotateZ(e.rotation, origin.value)
-      );
-    })
-    .onEnd(updateOnEnd);
-
-  const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      "worklet";
-      origin.value = {
-        x: focalX,
-        y: focalY,
-      };
-      savedMatrix.value = matrix.value;
-    })
-    .onChange((e) => {
-      "worklet";
-      matrix.value = multiply4(
-        savedMatrix.value,
-        scale(e.scale, e.scale, 1, origin.value)
-      );
-    })
-    .onEnd(updateOnEnd);
-
-  const gesture = Gesture.Simultaneous(pan, pinch, rotate);
+}) {
+  const gesture = useTransformGestures({
+    updatePath, // useCallback?
+    matrix,
+    focalX,
+    focalY,
+  });
 
   const style = useAnimatedStyle(() => {
     const finalMatrix = multiply(canvasMatrix.value, matrix.value);
@@ -135,6 +81,4 @@ const PathObject = ({
       </GestureDetector>
     </>
   );
-};
-
-export default PathObject;
+}

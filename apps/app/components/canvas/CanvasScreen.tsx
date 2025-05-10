@@ -24,6 +24,7 @@ export default function CanvasScreen() {
     onStateReceived: handleStateReceive,
   });
 
+  // Does this need to be here?
   const sendLocalState = useCallback(
     <T extends ClientPathElement>(type: MessageCommand, payload: T) => {
       if (!documentId) return;

@@ -2,13 +2,25 @@ import { useDocumentStore } from "@/state/store";
 import { Button, StyleSheet, View } from "react-native";
 
 export function CanvasPointerMode() {
-  const { setDrawingMode } = useDocumentStore((state) => state);
+  const { setDrawingMode, drawingMode } = useDocumentStore((state) => state);
 
   return (
     <View style={styles.container}>
-      <Button title="Draw" onPress={() => setDrawingMode("draw")} />
-      <Button title="Move" onPress={() => setDrawingMode("move")} />
-      <Button title="Select" onPress={() => setDrawingMode("select")} />
+      <Button
+        title="Draw"
+        onPress={() => setDrawingMode("draw")}
+        disabled={drawingMode === "draw"}
+      />
+      <Button
+        title="Move"
+        onPress={() => setDrawingMode("move")}
+        disabled={drawingMode === "move"}
+      />
+      <Button
+        title="Select"
+        onPress={() => setDrawingMode("select")}
+        disabled={drawingMode === "select"}
+      />
     </View>
   );
 }
