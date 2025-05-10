@@ -63,3 +63,5 @@ export interface PathElement extends Element {
     matrix: Matrix4;
   };
 }
+
+export type DrawingMode = "draw" | "select" | "move";

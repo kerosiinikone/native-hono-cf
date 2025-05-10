@@ -1,11 +1,3 @@
-import { useWebSocket } from "@/hooks/useWebSocket";
-import {
-  ClientPathElement,
-  DrawingMode,
-  transferClientPathToServer,
-  useDocumentStore,
-} from "@/state/store";
-import { MessageCommand, MessageType } from "@native-hono-cf/shared";
 import {
   Canvas,
   Group,
@@ -14,12 +6,9 @@ import {
   Path,
   Skia,
 } from "@shopify/react-native-skia";
-import { useCallback, useState } from "react";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import PathObject from "../Path";
+import { ClientPathElement, useDocumentStore } from "@/state/store";
 import {
   makeMutable,
   SharedValue,
@@ -27,30 +16,23 @@ import {
   useSharedValue,
 } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
-import PathObject from "./Path";
-import { CanvasPointerMode } from "./ui/CanvasPointerMode";
-import Toolbar from "./ui/Toolbar";
+import { MessageCommand } from "@native-hono-cf/shared";
 
-export default function SkiaComponent() {
-  // InitPaths()
+interface SkiaCnProps {
+  sendLocalState: <T extends ClientPathElement>(
+    type: MessageCommand,
+    payload: T
+  ) => void;
+}
 
+export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
   const {
-    documentId,
-    setLocalFromServerState,
     canvasMatrix,
+    drawingMode,
     elements,
-    addElement,
     updateElementMatrix,
-    removeElement,
+    addElement,
   } = useDocumentStore((state) => state);
-
-  // Central state lib later
-  const setDocumentState = useCallback(setLocalFromServerState, [documentId]);
-
-  const ws = useWebSocket({
-    documentId: documentId,
-    onStateReceived: setDocumentState,
-  });
 
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
@@ -62,14 +44,12 @@ export default function SkiaComponent() {
     ydown: 0,
   });
 
-  const [drawingMode, setDrawingMode] = useState<DrawingMode>("draw");
-
   const resetCanvasVariables = () => {
     currentPath.value = Skia.Path.Make();
     matrix.value = Matrix4();
   };
 
-  const draw = Gesture.Pan()
+  const drawingGesture = Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
     .onBegin((e) => {
@@ -142,22 +122,19 @@ export default function SkiaComponent() {
         ),
       };
 
-      const newElement = addElement({
-        ...newPath,
-        matrix: newPath.matrix,
-      });
-
-      ws.bufferMessage({
-        type: MessageType.STATE,
-        method: MessageCommand.ADD,
-        payload: transferClientPathToServer(newElement),
-      });
+      sendLocalState(
+        MessageCommand.ADD,
+        addElement({
+          ...newPath,
+          matrix: newPath.matrix,
+        })
+      );
 
       resetCanvasVariables();
     })
     .enabled(drawingMode === "draw");
 
-  const move = Gesture.Pan()
+  const canvasPanGesture = Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
     .onChange((e) => {
@@ -168,34 +145,15 @@ export default function SkiaComponent() {
       );
     });
 
-  const combined = Gesture.Simultaneous(move);
-
   const transform = useDerivedValue(() => {
     return [{ matrix: canvasMatrix.value }];
   });
 
-  const undo = () => {
-    // TODO: Only pop the updates that the client has made itself
-    if (!elements.length) return;
-
-    const lastElement = removeElement(
-      (elements[elements.length - 1] as ClientPathElement).id
-    );
-
-    if (!lastElement) return;
-
-    ws.bufferMessage({
-      type: MessageType.STATE,
-      method: MessageCommand.DELETE,
-      payload: transferClientPathToServer(lastElement),
-    });
-
-    resetCanvasVariables();
-  };
+  const gesture = drawingMode === "draw" ? drawingGesture : canvasPanGesture;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <GestureDetector gesture={drawingMode === "draw" ? draw : combined}>
+    <>
+      <GestureDetector gesture={gesture}>
         <Canvas style={{ height: "100%" }}>
           <Group transform={transform}>
             {elements.map((el, i) => (
@@ -223,32 +181,14 @@ export default function SkiaComponent() {
         elements.map((el, i) => (
           <PathObject
             key={i}
-            x={el.properties.x}
-            y={el.properties.y}
-            focalX={el.properties.focalX}
-            focalY={el.properties.focalY}
-            width={el.properties.width}
+            {...el.properties}
             canvasMatrix={canvasMatrix}
-            height={el.properties.height}
-            matrix={el.properties.matrix}
             updatePath={(params: Matrix4) => {
               updateElementMatrix(el.id, params);
-
-              // Laggy?
-              ws.bufferMessage({
-                type: MessageType.STATE,
-                method: MessageCommand.UPDATE,
-                payload: transferClientPathToServer(el),
-              });
+              sendLocalState(MessageCommand.UPDATE, el);
             }}
           />
         ))}
-      <CanvasPointerMode
-        setModeDraw={() => setDrawingMode("draw")}
-        setModeMove={() => setDrawingMode("move")}
-        setModeSelect={() => setDrawingMode("select")}
-      />
-      <Toolbar undo={undo} />
-    </GestureHandlerRootView>
+    </>
   );
 }

@@ -1,21 +1,14 @@
+import { useDocumentStore } from "@/state/store";
 import { Button, StyleSheet, View } from "react-native";
 
-interface CanvasPointerModeProps {
-  setModeDraw: () => void;
-  setModeMove: () => void;
-  setModeSelect: () => void;
-}
+export function CanvasPointerMode() {
+  const { setDrawingMode } = useDocumentStore((state) => state);
 
-export function CanvasPointerMode({
-  setModeDraw,
-  setModeMove,
-  setModeSelect,
-}: CanvasPointerModeProps) {
   return (
     <View style={styles.container}>
-      <Button title="Draw" onPress={setModeDraw} />
-      <Button title="Move" onPress={setModeMove} />
-      <Button title="Select" onPress={setModeSelect} />
+      <Button title="Draw" onPress={() => setDrawingMode("draw")} />
+      <Button title="Move" onPress={() => setDrawingMode("move")} />
+      <Button title="Select" onPress={() => setDrawingMode("select")} />
     </View>
   );
 }

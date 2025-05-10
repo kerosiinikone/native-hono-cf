@@ -1,13 +1,34 @@
+import { ClientPathElement, useDocumentStore } from "@/state/store";
+import { MessageCommand } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
 interface ToolbarProps {
-  undo: () => void;
+  sendLocalState: <T extends ClientPathElement>(
+    type: MessageCommand,
+    payload: T
+  ) => void;
 }
 
-export default function Toolbar({ undo }: ToolbarProps) {
+export default function Toolbar({ sendLocalState }: ToolbarProps) {
+  const { removeElement, elements } = useDocumentStore((state) => state);
+
+  const undoPath = () => {
+    // TODO: Only pop the updates that the client has made itself
+    // -> for example, in SETUP, send a client id and only pop the updates
+    // that are from the client itself (by looping through the elements and checking)
+
+    if (!elements.length) return;
+    const lastElement = removeElement(
+      (elements[elements.length - 1] as ClientPathElement).id
+    );
+    if (!lastElement) return;
+
+    sendLocalState(MessageCommand.DELETE, lastElement as ClientPathElement);
+  };
+
   return (
     <View style={styles.container}>
-      <Button title="Undo" onPress={undo} />
+      <Button title="Undo" onPress={undoPath} />
     </View>
   );
 }

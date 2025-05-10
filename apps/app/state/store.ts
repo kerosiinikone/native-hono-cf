@@ -1,12 +1,12 @@
-import { Element, ElementType, PathElement } from "@native-hono-cf/shared";
+import {
+  DrawingMode,
+  Element,
+  ElementType,
+  PathElement,
+} from "@native-hono-cf/shared";
 import { Matrix4, Skia, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
-import { immer } from "zustand/middleware/immer";
-
-// Immer is for updating the state in an immutable way (array and object updates) -> note for self
-
-export type DrawingMode = "draw" | "select" | "move";
 
 // Differs from Element's path properties
 export type ClientPath = {
@@ -20,11 +20,18 @@ export type ClientPath = {
   matrix: SharedValue<Matrix4>;
 };
 
-export type ClientPathElement = {
+export interface ClientElement {
   id: string;
+  type: ElementType;
+  properties: Record<string, any>; // Additional properties can be added here
+}
+
+export interface ClientPathElement extends ClientElement {
   type: ElementType.Path;
   properties: ClientPath;
-};
+}
+
+// Immer is for updating the state in an immutable way (array and object updates) -> note for self
 
 type State = {
   documentId: string | null;
@@ -59,6 +66,7 @@ function transformServerPathToClient(
   };
 }
 
+// TODO: Make more generic
 export function transferClientPathToServer(
   clientPath: ClientPathElement
 ): PathElement {
