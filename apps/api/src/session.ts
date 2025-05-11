@@ -7,6 +7,11 @@ import {
   WebSocketMessageSchema,
   WSMessage,
   Element,
+  SetupMessage,
+  ErrorMessage,
+  StateDeleteMessage,
+  StateUpdateMessage,
+  StateMessageCommands,
 } from "@native-hono-cf/shared";
 import { D1Persistence, DocumentStorage } from "./persistence";
 
@@ -55,7 +60,7 @@ export class DocumentSession {
 
   addClient(ws: WebSocket): string {
     const clientId = crypto.randomUUID();
-    this.clientMap.set(ws, crypto.randomUUID());
+    this.clientMap.set(ws, clientId);
     console.log(
       `[DocumentSession] Client ${clientId} connected. Total clients: ${this.clientMap.size}`
     );
@@ -90,14 +95,16 @@ export class DocumentSession {
         ws.send(
           JSON.stringify({
             type: MessageType.ERROR,
-            method: MessageCommand.INFO,
-            payload: "Invalid message format.",
-          } as WSMessage)
+            command: MessageCommand.INFO,
+            payload: {
+              message: "Invalid message schema",
+            },
+          } as ErrorMessage)
         );
         return;
       }
 
-      const { type, payload, method } =
+      const { type, command } =
         wsMessageValidation.data as WebSocketMessageSchema;
 
       switch (type) {
@@ -105,28 +112,45 @@ export class DocumentSession {
           ws.send(
             JSON.stringify({
               type: MessageType.STATE,
-              method: MessageCommand.ADD,
+              command: MessageCommand.ADD,
               payload: this.state.elements,
             } as WSMessage)
           );
           break;
         case MessageType.STATE:
-          const stateUpdate = payload as DocumentStateUpdate;
-          if (!stateUpdate) {
+          const stateUpdate = wsMessageValidation.data as
+            | StateUpdateMessage
+            | StateDeleteMessage;
+
+          if (!stateUpdate || typeof stateUpdate === "string") {
             console.warn(
-              "[DocumentSession] Received STATE update without elements."
+              "[DocumentSession] Received STATE update without state."
             );
             this.state = Object.assign(this.state, stateUpdate);
           }
-          switch (method) {
+
+          switch (command) {
             case MessageCommand.DELETE:
-              this.state.elements = this.state.elements.filter(
-                (element) => element.id !== (stateUpdate as Element).id
-              );
+              const stateDelete =
+                wsMessageValidation.data as StateDeleteMessage;
+              stateDelete.payload.elementIds.forEach((did) => {
+                this.state.elements = this.state.elements.filter(
+                  (element) => element.id !== did
+                );
+              });
               break;
             case MessageCommand.UPDATE:
-              const updatePayload = stateUpdate as Element;
+              const updatePayload = stateUpdate.payload as Element;
               const elementIdToUpdate = updatePayload.id;
+
+              if (
+                !this.state.elements.some((el) => el.id === elementIdToUpdate)
+              ) {
+                console.warn(
+                  `[DocumentSession] Element with ID '${elementIdToUpdate}' not found. No update performed.`
+                );
+                return;
+              }
 
               let found = false;
               this.state.elements = this.state.elements.map((element) => {
@@ -150,26 +174,29 @@ export class DocumentSession {
               }
               break;
             case MessageCommand.ADD:
+              const addPayload = stateUpdate.payload as Element[];
               this.state.elements = this.state.elements.concat(
-                [stateUpdate].flat()
+                [addPayload].flat()
               );
               break;
             default:
               console.warn(
                 "[DocumentSession] Unknown method for STATE update:",
-                method
+                command
               );
               ws.send(
                 JSON.stringify({
                   type: MessageType.ERROR,
-                  method: MessageCommand.INFO,
-                  payload: `Unknown method for STATE update: ${method}`,
+                  command: MessageCommand.INFO,
+                  payload: {
+                    message: `Unknown method for STATE update: ${command}`,
+                  },
                 } as WSMessage)
               );
               return;
           }
 
-          this.broadcast(this.clientMap.get(ws));
+          this.broadcast(message as string, this.clientMap.get(ws));
           this.persistState();
           break;
         default:
@@ -177,8 +204,10 @@ export class DocumentSession {
           ws.send(
             JSON.stringify({
               type: MessageType.ERROR,
-              method: MessageCommand.INFO,
-              payload: `Received: ${type}`,
+              command: MessageCommand.INFO,
+              payload: {
+                message: `Unknown message type: ${type}`,
+              },
             } as WSMessage)
           );
       }
@@ -187,24 +216,20 @@ export class DocumentSession {
       ws.send(
         JSON.stringify({
           type: MessageType.ERROR,
-          method: MessageCommand.INFO,
-          payload: "Error processing message.",
+          command: MessageCommand.INFO,
+          payload: {
+            message: "Error processing message",
+          },
         } as WSMessage)
       );
     }
   }
 
-  private broadcast(senderId?: string): void {
+  private broadcast(msg: string, senderId?: string): void {
     this.clientMap.forEach((clientId, ws) => {
       if (ws.readyState === WebSocket.OPEN && clientId !== senderId) {
         try {
-          // Write a JSON wrapper for WS messages
-          ws.send(
-            JSON.stringify({
-              type: MessageType.STATE,
-              payload: this.state.elements,
-            })
-          );
+          ws.send(msg);
         } catch (e) {
           console.error(
             `[DocumentSession] Error sending message to ${clientId}:`,

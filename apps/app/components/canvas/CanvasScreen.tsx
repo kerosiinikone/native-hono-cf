@@ -4,7 +4,13 @@ import {
   transferClientPathToServer,
   useDocumentStore,
 } from "@/state/store";
-import { MessageCommand, MessageType } from "@native-hono-cf/shared";
+import {
+  DocumentStateUpdate,
+  MessageCommand,
+  MessageType,
+  StateMessageCommands,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import { useCallback } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -26,13 +32,16 @@ export default function CanvasScreen() {
 
   // Does this need to be here?
   const sendLocalState = useCallback(
-    <T extends ClientPathElement>(type: MessageCommand, payload: T) => {
+    <T extends ClientPathElement>(type: StateMessageCommands, payload: T) => {
       if (!documentId) return;
       bufferMessage({
         type: MessageType.STATE,
-        method: type,
-        payload: transferClientPathToServer(payload),
-      });
+        command: type,
+        payload:
+          type !== MessageCommand.DELETE
+            ? transferClientPathToServer(payload)
+            : { elementIds: [payload.id] },
+      } as WSMessage);
     },
     [documentId, bufferMessage]
   );

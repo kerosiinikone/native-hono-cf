@@ -1,7 +1,9 @@
 import {
+  DocumentStateUpdate,
   DrawingMode,
   Element,
   ElementType,
+  MessageCommand,
   PathElement,
 } from "@native-hono-cf/shared";
 import { Matrix4, Skia, SkPath } from "@shopify/react-native-skia";
@@ -43,10 +45,20 @@ type State = {
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
-  setLocalFromServerState: (serverState: Element[]) => void;
+  setLocalFromServerState: (
+    serverState:
+      | DocumentStateUpdate
+      | {
+          elementIds: string[];
+        },
+    command: MessageCommand
+  ) => void;
   addElement: (elementData: ClientPath) => ClientPathElement;
   removeElement: (id: string) => ClientPathElement | null;
-  updateElementMatrix: (elementId: string, newMatrix: Matrix4) => void;
+  updateElementMatrix: (
+    elementId: string,
+    newMatrix: Matrix4
+  ) => ClientPathElement | null;
 };
 
 function transformServerPathToClient(
@@ -61,7 +73,7 @@ function transformServerPathToClient(
     properties: {
       ...serverPath.properties,
       path: skPath,
-      matrix: makeMutable(serverPath.properties.matrix || Matrix4()),
+      matrix: makeMutable(serverPath.properties.matrix),
     },
   };
 }
@@ -91,14 +103,41 @@ export const useDocumentStore = create<State & Actions>((set) => ({
 
   setDrawingMode: (mode) => set({ drawingMode: mode }),
 
-  setLocalFromServerState: (serverState) =>
-    set(() => ({
-      // -> diff and update selectively
-      elements: serverState
-        .filter((el) => el.type === "path")
-        .map((el) => transformServerPathToClient(el as PathElement))
-        .filter(Boolean) as ClientPathElement[],
-    })),
+  setLocalFromServerState: (serverState, cmd) => {
+    if (cmd === MessageCommand.DELETE) {
+      const elementIds = (
+        serverState as {
+          elementIds: string[];
+        }
+      ).elementIds;
+      set((state) => ({
+        elements: state.elements.filter((el) => !elementIds.includes(el.id)),
+      }));
+      return;
+    }
+    if (cmd === MessageCommand.UPDATE) {
+      set(({ elements }) => ({
+        elements: elements.map((el) =>
+          el.id === (serverState as PathElement).id
+            ? transformServerPathToClient({
+                ...el,
+                properties: (serverState as PathElement).properties,
+              })
+            : el
+        ) as ClientPathElement[],
+      }));
+      return;
+    }
+    set((state) => ({
+      elements: state.elements.concat(
+        [serverState as DocumentStateUpdate]
+          .flat()
+          .filter((el) => el.type === "path")
+          .map((el) => transformServerPathToClient(el as PathElement))
+          .filter(Boolean) as ClientPathElement[]
+      ),
+    }));
+  },
 
   addElement: (elementData) => {
     const newElement: ClientPathElement = {
@@ -126,12 +165,16 @@ export const useDocumentStore = create<State & Actions>((set) => ({
     return removedElement;
   },
 
-  updateElementMatrix: (elementId, newMatrix) =>
+  updateElementMatrix: (elementId, newMatrix) => {
+    let updatedElement: ClientPathElement | null = null;
     set((state) => {
       const element = state.elements.find((el) => el.id === elementId);
       if (element && element.properties.matrix) {
-        element.properties.matrix.set(newMatrix);
+        updatedElement = element;
+        element.properties.matrix.value = newMatrix;
       }
       return { elements: [...state.elements] };
-    }),
+    });
+    return updatedElement;
+  },
 }));

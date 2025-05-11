@@ -1,5 +1,5 @@
 import { ClientPathElement, useDocumentStore } from "@/state/store";
-import { MessageCommand } from "@native-hono-cf/shared";
+import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import {
   Matrix4,
   notifyChange,
@@ -16,7 +16,7 @@ import { multiply4, translate } from "react-native-redash";
 
 interface DrawingGestureProps {
   sendLocalState: <T extends ClientPathElement>(
-    type: MessageCommand,
+    type: StateMessageCommands,
     payload: T
   ) => void;
 }

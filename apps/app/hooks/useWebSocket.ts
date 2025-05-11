@@ -1,5 +1,6 @@
 import { SERVER_URL } from "@/constants/server";
 import {
+  DocumentStateUpdate,
   Element,
   MessageCommand,
   MessageType,
@@ -11,7 +12,14 @@ const BUFFER_INTERVAL = 250;
 
 interface UseWebSocketOptions {
   documentId: string | null;
-  onStateReceived: (state: Element[]) => void;
+  onStateReceived: (
+    state:
+      | DocumentStateUpdate
+      | {
+          elementIds: string[];
+        },
+    command: MessageCommand
+  ) => void;
   onError?: (error: Event) => void;
 }
 
@@ -61,7 +69,7 @@ export function useWebSocket({
       ws.send(
         JSON.stringify({
           type: MessageType.SETUP,
-          method: MessageCommand.INFO,
+          command: MessageCommand.INFO,
         } as WSMessage)
       );
 
@@ -75,15 +83,12 @@ export function useWebSocket({
       try {
         const data = JSON.parse(event.data as string) as WSMessage;
 
-        if (
-          data.type === MessageType.STATE &&
-          data.payload &&
-          typeof data.payload !== "string"
-        ) {
-          onStateReceived([data.payload].flat());
+        if (data.type === MessageType.STATE && data.payload) {
+          // Relay for now
+          onStateReceived(data.payload, data.command);
         }
       } catch (e) {
-        console.error("Error processing WebSocket message:", e);
+        console.warn("Error processing WebSocket message:", e);
       }
     };
 

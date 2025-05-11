@@ -30,18 +30,13 @@ export default function useTransformGestures({
     updatePath(matrix.value);
   }, [savedMatrix, matrix, updatePath]);
 
-  const pan = Gesture.Pan()
-    .onChange((e) => {
-      "worklet";
-      matrix.value = multiply4(
-        translate(e.changeX, e.changeY, 0),
-        matrix.value
-      );
+  const pan = Gesture.Pan().onChange((e) => {
+    "worklet";
+    matrix.value = multiply4(translate(e.changeX, e.changeY, 0), matrix.value);
 
-      // Add buffering here to avoid too many updates?
-      updatePath(matrix.value);
-    })
-    .onEnd(updateOnEnd);
+    // Add buffering here to avoid too many updates?
+    updateOnEnd();
+  });
 
   const rotate = Gesture.Rotation()
     .onBegin(() => {
@@ -59,9 +54,8 @@ export default function useTransformGestures({
         rotateZ(e.rotation, origin.value)
       );
 
-      updatePath(matrix.value);
-    })
-    .onEnd(updateOnEnd);
+      updateOnEnd();
+    });
 
   const pinch = Gesture.Pinch()
     .onBegin(() => {
@@ -79,9 +73,8 @@ export default function useTransformGestures({
         scale(e.scale, e.scale, 1, origin.value)
       );
 
-      updatePath(matrix.value);
-    })
-    .onEnd(updateOnEnd);
+      updateOnEnd();
+    });
 
   return Gesture.Simultaneous(pan, pinch, rotate);
 }

@@ -1,10 +1,10 @@
 import { ClientPathElement, useDocumentStore } from "@/state/store";
-import { MessageCommand } from "@native-hono-cf/shared";
+import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
 interface ToolbarProps {
   sendLocalState: <T extends ClientPathElement>(
-    type: MessageCommand,
+    type: StateMessageCommands,
     payload: T
   ) => void;
 }
