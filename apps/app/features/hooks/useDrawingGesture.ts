@@ -1,4 +1,4 @@
-import { ClientPathElement, useDocumentStore } from "@/state/store";
+import { ClientPath, ClientPathElement, useDocumentStore } from "@/state/store";
 import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import {
   Matrix4,
@@ -19,6 +19,75 @@ interface DrawingGestureProps {
     type: StateMessageCommands,
     payload: T
   ) => void;
+}
+
+function generateNewPath(
+  currentPath: SharedValue<SkPath>,
+  currentPathDimensions: SharedValue<{
+    xup: number;
+    xdown: number;
+    yup: number;
+    ydown: number;
+  }>,
+  matrix: SharedValue<Matrix4>,
+  canvasMatrix: SharedValue<Matrix4>
+): ClientPath {
+  let width = Math.abs(
+    currentPathDimensions.value.xup - currentPathDimensions.value.xdown
+  );
+  let height = Math.abs(
+    currentPathDimensions.value.yup - currentPathDimensions.value.ydown
+  );
+
+  if (width < 50) {
+    currentPathDimensions.value.xup += 20;
+    currentPathDimensions.value.xdown -= 20;
+
+    width = Math.abs(
+      currentPathDimensions.value.xup - currentPathDimensions.value.xdown
+    );
+  }
+
+  if (height < 50) {
+    currentPathDimensions.value.yup += 20;
+    currentPathDimensions.value.ydown -= 20;
+
+    height = Math.abs(
+      currentPathDimensions.value.yup - currentPathDimensions.value.ydown
+    );
+  }
+
+  return {
+    path: currentPath.value.copy(),
+    x: Math.min(
+      currentPathDimensions.value.xup,
+      currentPathDimensions.value.xdown
+    ),
+    y: Math.min(
+      currentPathDimensions.value.yup,
+      currentPathDimensions.value.ydown
+    ),
+    focalX:
+      Math.min(
+        currentPathDimensions.value.xup,
+        currentPathDimensions.value.xdown
+      ) +
+      width / 2,
+    focalY:
+      Math.min(
+        currentPathDimensions.value.yup,
+        currentPathDimensions.value.ydown
+      ) +
+      height / 2,
+    width,
+    height,
+    matrix: makeMutable(
+      multiply4(
+        matrix.value,
+        translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
+      )
+    ),
+  };
 }
 
 export default function useDrawingGesture({
@@ -43,8 +112,6 @@ export default function useDrawingGesture({
     currentPath.value = Skia.Path.Make();
     matrix.value = Matrix4();
   };
-
-  // TODO: Separate business logic from UI logic
 
   const drawingGesture = Gesture.Pan()
     .averageTouches(true)
@@ -80,52 +147,14 @@ export default function useDrawingGesture({
     })
     .onEnd(async () => {
       "worklet";
-      const width = Math.abs(
-        currentPathDimensions.value.xup - currentPathDimensions.value.xdown
-      );
-      const height = Math.abs(
-        currentPathDimensions.value.yup - currentPathDimensions.value.ydown
+      const newPath = generateNewPath(
+        currentPath,
+        currentPathDimensions,
+        matrix,
+        canvasMatrix
       );
 
-      const newPath = {
-        path: currentPath.value.copy(),
-        x: Math.min(
-          currentPathDimensions.value.xup,
-          currentPathDimensions.value.xdown
-        ),
-        y: Math.min(
-          currentPathDimensions.value.yup,
-          currentPathDimensions.value.ydown
-        ),
-        focalX:
-          Math.min(
-            currentPathDimensions.value.xup,
-            currentPathDimensions.value.xdown
-          ) +
-          width / 2,
-        focalY:
-          Math.min(
-            currentPathDimensions.value.yup,
-            currentPathDimensions.value.ydown
-          ) +
-          height / 2,
-        width,
-        height,
-        matrix: makeMutable(
-          multiply4(
-            matrix.value,
-            translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
-          )
-        ),
-      };
-
-      sendLocalState(
-        MessageCommand.ADD,
-        addElement({
-          ...newPath,
-          matrix: newPath.matrix,
-        })
-      );
+      sendLocalState(MessageCommand.ADD, addElement(newPath));
 
       resetCanvasVariables();
     });

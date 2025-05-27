@@ -5,17 +5,34 @@ import {
   convertToAffineMatrix,
   convertToColumnMajor,
   Matrix4,
-  rotateZ,
-  scale,
 } from "@shopify/react-native-skia";
-import { useCallback } from "react";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   SharedValue,
   useAnimatedStyle,
-  useSharedValue,
 } from "react-native-reanimated";
-import { multiply4, translate } from "react-native-redash";
+import { translate } from "react-native-redash";
+
+function computeFinalTransformMatrix(
+  canvasMatrix: SharedValue<Matrix4>,
+  matrix: SharedValue<Matrix4>,
+  focalX: number,
+  focalY: number
+) {
+  const finalMatrix = multiply(canvasMatrix.value, matrix.value);
+
+  const localCenterX = focalX;
+  const localCenterY = focalY;
+
+  const transformMatrix = multiply(
+    translate(-localCenterX, -localCenterY, 0),
+    finalMatrix,
+    translate(localCenterX, localCenterY, 0)
+  );
+
+  const finalTransformMatrixForStyle = convertToColumnMajor(transformMatrix);
+  return convertToAffineMatrix(finalTransformMatrixForStyle);
+}
 
 export default function SelectPath({
   matrix,
@@ -45,34 +62,24 @@ export default function SelectPath({
     focalY,
   });
 
-  const style = useAnimatedStyle(() => {
-    const finalMatrix = multiply(canvasMatrix.value, matrix.value);
-
-    const localCenterX = focalX;
-    const localCenterY = focalY;
-
-    const transformMatrix = multiply(
-      translate(-localCenterX, -localCenterY, 0),
-      finalMatrix,
-      translate(localCenterX, localCenterY, 0)
-    );
-
-    const finalTransformMatrixForStyle = convertToColumnMajor(transformMatrix);
-
-    return {
-      position: "absolute",
-      backgroundColor: "rgba(0, 0, 0, 0.5)",
-      left: x,
-      top: y,
-      width: width,
-      height: height,
-      transform: [
-        {
-          matrix: convertToAffineMatrix(finalTransformMatrixForStyle),
-        },
-      ],
-    };
-  });
+  const style = useAnimatedStyle(() => ({
+    position: "absolute",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    left: x,
+    top: y,
+    width: width,
+    height: height,
+    transform: [
+      {
+        matrix: computeFinalTransformMatrix(
+          canvasMatrix,
+          matrix,
+          focalX,
+          focalY
+        ),
+      },
+    ],
+  }));
 
   return (
     <>

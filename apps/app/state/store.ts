@@ -1,7 +1,6 @@
 import {
   DocumentStateUpdate,
   DrawingMode,
-  Element,
   ElementType,
   MessageCommand,
   PathElement,
