@@ -1,11 +1,7 @@
-import { ClientPath, ClientPathElement } from "@/state/store";
-import { Matrix4, Skia, rect } from "@shopify/react-native-skia";
+import { ClientObject, useDocumentStore } from "@/state/store";
+import { Matrix4, rect, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
-import {
-  makeMutable,
-  SharedValue,
-  useSharedValue,
-} from "react-native-reanimated";
+import { makeMutable, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 // More elegant way to copy a matrix?
@@ -30,9 +26,11 @@ function copyMatrix(matrix: Matrix4): Matrix4 {
   ];
 }
 
-// Enbale stretch and resizing of the rectangle
-export default function useRect(canvasMatrix: SharedValue<Matrix4>) {
+// Enable stretch and resizing of the rectangle
+export default function useRect() {
+  const { canvasMatrix } = useDocumentStore((state) => state);
   const { width, height } = useWindowDimensions();
+  const matrix = useSharedValue(Matrix4());
 
   const rHeight = height / 5;
   const rWidth = width / 4;
@@ -42,25 +40,23 @@ export default function useRect(canvasMatrix: SharedValue<Matrix4>) {
 
   const r = Skia.Path.Make();
   const sharedRect = useSharedValue(r.addRect(rect(x, y, rWidth, rHeight)));
-  const matrix = useSharedValue(Matrix4());
 
   return {
-    createRectPath: (): ClientPath => {
-      return {
-        path: sharedRect.value.copy(),
-        x,
-        y,
-        focalX: rWidth / 2,
-        focalY: rHeight / 2,
-        width: rWidth,
-        height: rHeight,
-        matrix: makeMutable(
-          multiply4(
-            copyMatrix(matrix.value),
-            translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
-          )
-        ),
-      };
-    },
+    createRectPath: (): ClientObject => ({
+      path: sharedRect.value.copy(),
+      x,
+      y,
+      focalX: rWidth / 2, // ???
+      focalY: rHeight / 2, // ???
+      width: rWidth,
+      height: rHeight,
+      matrix: makeMutable(
+        multiply4(
+          copyMatrix(matrix.value),
+          translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
+        )
+      ),
+      stretchable: true,
+    }),
   };
 }

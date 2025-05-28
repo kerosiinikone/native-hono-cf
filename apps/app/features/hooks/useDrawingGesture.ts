@@ -1,4 +1,4 @@
-import { ClientPath, ClientPathElement, useDocumentStore } from "@/state/store";
+import { ClientElement, ClientObject, useDocumentStore } from "@/state/store";
 import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import {
   Matrix4,
@@ -15,7 +15,7 @@ import {
 import { multiply4, translate } from "react-native-redash";
 
 interface DrawingGestureProps {
-  sendLocalState: <T extends ClientPathElement>(
+  sendLocalState: <T extends ClientElement>(
     type: StateMessageCommands,
     payload: T
   ) => void;
@@ -31,7 +31,7 @@ function generateNewPath(
   }>,
   matrix: SharedValue<Matrix4>,
   canvasMatrix: SharedValue<Matrix4>
-): ClientPath {
+): ClientObject {
   let width = Math.abs(
     currentPathDimensions.value.xup - currentPathDimensions.value.xdown
   );
@@ -87,6 +87,7 @@ function generateNewPath(
         translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
       )
     ),
+    stretchable: false,
   };
 }
 

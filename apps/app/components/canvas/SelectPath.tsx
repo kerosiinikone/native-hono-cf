@@ -5,6 +5,7 @@ import {
   convertToAffineMatrix,
   convertToColumnMajor,
   Matrix4,
+  SkPath,
 } from "@shopify/react-native-skia";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -38,9 +39,11 @@ export default function SelectPath({
   matrix,
   x,
   y,
+  stretchable,
   width,
   focalX,
   focalY,
+  id,
   height,
   canvasMatrix,
   updatePath,
@@ -50,7 +53,9 @@ export default function SelectPath({
   x: number;
   y: number;
   focalX: number;
+  id: string;
   focalY: number;
+  stretchable: boolean;
   width: number;
   height: number;
   updatePath: (params: Matrix4) => void;
@@ -59,6 +64,10 @@ export default function SelectPath({
     updatePath, // useCallback?
     matrix,
     focalX,
+    width,
+    id,
+    height,
+    stretchable,
     focalY,
   });
 

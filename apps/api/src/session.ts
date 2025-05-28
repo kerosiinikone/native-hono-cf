@@ -1,17 +1,14 @@
 import {
   DocumentState,
-  DocumentStateUpdate,
-  MessageType,
+  Element,
+  ErrorMessage,
   MessageCommand,
+  MessageType,
+  StateDeleteMessage,
+  StateUpdateMessage,
   webSocketMessageSchema,
   WebSocketMessageSchema,
   WSMessage,
-  Element,
-  SetupMessage,
-  ErrorMessage,
-  StateDeleteMessage,
-  StateUpdateMessage,
-  StateMessageCommands,
 } from "@native-hono-cf/shared";
 import { D1Persistence, DocumentStorage } from "./persistence";
 

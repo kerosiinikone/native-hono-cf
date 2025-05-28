@@ -1,16 +1,16 @@
 import {
   DocumentStateUpdate,
   DrawingMode,
+  Element,
   ElementType,
   MessageCommand,
   PathElement,
 } from "@native-hono-cf/shared";
-import { Matrix4, Skia, SkPath } from "@shopify/react-native-skia";
+import { Matrix4, rect, Skia, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 
-// Differs from Element's path properties
-export type ClientPath = {
+export type ClientObject = {
   path: SkPath;
   x: number;
   y: number;
@@ -19,24 +19,18 @@ export type ClientPath = {
   width: number;
   height: number;
   matrix: SharedValue<Matrix4>;
+  stretchable: boolean;
 };
 
 export interface ClientElement {
   id: string;
   type: ElementType;
-  properties: Record<string, any>; // Additional properties can be added here
+  properties: ClientObject;
 }
-
-export interface ClientPathElement extends ClientElement {
-  type: ElementType.Path;
-  properties: ClientPath;
-}
-
-// Immer is for updating the state in an immutable way (array and object updates) -> note for self
 
 type State = {
   documentId: string | null;
-  elements: ClientPathElement[];
+  elements: ClientElement[];
   drawingMode: DrawingMode;
   canvasMatrix: SharedValue<Matrix4>;
 };
@@ -44,6 +38,11 @@ type State = {
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
+
+  // Separate actions for editing rectangle dimensions
+  editRectWidth: (id: string, width: number, shift?: number) => void;
+  editRectHeight: (id: string, height: number, shift?: number) => void;
+
   setLocalFromServerState: (
     serverState:
       | DocumentStateUpdate
@@ -52,23 +51,23 @@ type Actions = {
         },
     command: MessageCommand
   ) => void;
-  addElement: (elementData: ClientPath) => ClientPathElement;
-  removeElement: (id: string) => ClientPathElement | null;
+  addElement: (elementData: ClientObject) => ClientElement;
+  removeElement: (id: string) => ClientElement | null;
   updateElementMatrix: (
     elementId: string,
     newMatrix: Matrix4
-  ) => ClientPathElement | null;
+  ) => ClientElement | null;
 };
 
 function transformServerPathToClient(
-  serverPath: PathElement
-): ClientPathElement | null {
+  serverPath: Element
+): ClientElement | null {
   if (!serverPath.properties.path) return null;
   const skPath = Skia.Path.MakeFromSVGString(serverPath.properties.path);
   if (!skPath) return null;
   return {
     id: serverPath.id,
-    type: ElementType.Path,
+    type: serverPath.type,
     properties: {
       ...serverPath.properties,
       path: skPath,
@@ -77,13 +76,10 @@ function transformServerPathToClient(
   };
 }
 
-// TODO: Make more generic
-export function transferClientPathToServer(
-  clientPath: ClientPathElement
-): PathElement {
+export function transferClientPathToServer(clientPath: ClientElement): Element {
   return {
     id: clientPath.id,
-    type: ElementType.Path,
+    type: clientPath.type,
     properties: {
       ...clientPath.properties,
       matrix: clientPath.properties.matrix.value,
@@ -92,7 +88,7 @@ export function transferClientPathToServer(
   };
 }
 
-export const useDocumentStore = create<State & Actions>((set) => ({
+export const useDocumentStore = create<State & Actions>((set, get) => ({
   documentId: "289d4f3c-3617-45cb-a696-15ed24386388", // test
   elements: [],
   drawingMode: "draw",
@@ -101,6 +97,74 @@ export const useDocumentStore = create<State & Actions>((set) => ({
   setDocumentId: (id) => set({ documentId: id }),
 
   setDrawingMode: (mode) => set({ drawingMode: mode }),
+
+  // Optimize
+  editRectWidth: (id, newWidth, shiftX) => {
+    const path = get().elements.find((el) => el.id === id);
+    if (!path || path.type !== ElementType.Path) return;
+
+    // why not make path mutable in the first place and reassign it here?
+    const newPath = Skia.Path.Make();
+    const r = newPath.addRect(
+      rect(
+        shiftX ? path.properties.x + shiftX : path.properties.x,
+        path.properties.y,
+        newWidth,
+        path.properties.height
+      )
+    );
+
+    set((state) => ({
+      elements: state.elements.map((el) => {
+        if (el.id === id) {
+          return {
+            ...el,
+            properties: {
+              ...el.properties,
+              path: r,
+              x: shiftX ? path.properties.x + shiftX : path.properties.x,
+              focalX: newWidth / 2,
+              width: newWidth,
+            },
+          };
+        }
+        return el;
+      }),
+    }));
+  },
+
+  editRectHeight: (id, newHeight, shiftY) => {
+    const path = get().elements.find((el) => el.id === id);
+    if (!path || path.type !== ElementType.Path) return;
+
+    const newPath = Skia.Path.Make();
+    const r = newPath.addRect(
+      rect(
+        path.properties.x,
+        shiftY ? path.properties.y + shiftY : path.properties.y,
+        path.properties.width,
+        newHeight
+      )
+    );
+
+    set((state) => ({
+      elements: state.elements.map((el) => {
+        if (el.id === id) {
+          return {
+            ...el,
+            properties: {
+              ...el.properties,
+              path: r,
+              y: shiftY ? path.properties.y + shiftY : path.properties.y,
+              focalY: newHeight / 2,
+              height: newHeight,
+            },
+          };
+        }
+        return el;
+      }),
+    }));
+  },
 
   setLocalFromServerState: (serverState, cmd) => {
     if (cmd === MessageCommand.DELETE) {
@@ -123,7 +187,7 @@ export const useDocumentStore = create<State & Actions>((set) => ({
                 properties: (serverState as PathElement).properties,
               })
             : el
-        ) as ClientPathElement[],
+        ) as ClientElement[],
       }));
       return;
     }
@@ -133,13 +197,13 @@ export const useDocumentStore = create<State & Actions>((set) => ({
           .flat()
           .filter((el) => el.type === "path")
           .map((el) => transformServerPathToClient(el as PathElement))
-          .filter(Boolean) as ClientPathElement[]
+          .filter(Boolean) as ClientElement[]
       ),
     }));
   },
 
   addElement: (elementData) => {
-    const newElement: ClientPathElement = {
+    const newElement: ClientElement = {
       id: crypto.randomUUID(),
       type: ElementType.Path,
       properties: elementData,
@@ -151,7 +215,7 @@ export const useDocumentStore = create<State & Actions>((set) => ({
   },
 
   removeElement: (id) => {
-    let removedElement: ClientPathElement | null = null;
+    let removedElement: ClientElement | null = null;
     set((state) => ({
       elements: state.elements.filter((el) => {
         if (el.id === id) {
@@ -165,7 +229,7 @@ export const useDocumentStore = create<State & Actions>((set) => ({
   },
 
   updateElementMatrix: (elementId, newMatrix) => {
-    let updatedElement: ClientPathElement | null = null;
+    let updatedElement: ClientElement | null = null;
     set((state) => {
       const element = state.elements.find((el) => el.id === elementId);
       if (element && element.properties.matrix) {

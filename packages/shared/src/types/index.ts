@@ -6,6 +6,7 @@ export type DrawingMode = "draw" | "select" | "move";
 
 export enum ElementType {
   Path = "path",
+  Rect = "rect",
 }
 
 export enum MessageType {
@@ -48,19 +49,30 @@ export interface BaseElementProperties {
 
 export interface PathElementProperties extends BaseElementProperties {
   path: string;
+  stretchable: false;
 }
 
-// Only support path elements for now
+export interface RectPathElementProperties extends BaseElementProperties {
+  path: string;
+  stretchable: true;
+}
+
 export type Element = {
   id: string;
-  type: ElementType.Path;
-  properties: PathElementProperties;
+  type: ElementType;
+  properties: RectPathElementProperties | PathElementProperties;
 };
 
 export interface PathElement extends Element {
   id: string;
   type: ElementType.Path;
   properties: PathElementProperties;
+}
+
+export interface RectElement extends Element {
+  id: string;
+  type: ElementType.Rect;
+  properties: RectPathElementProperties;
 }
 
 export interface SetupMessage {

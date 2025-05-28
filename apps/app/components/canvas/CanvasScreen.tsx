@@ -1,11 +1,10 @@
 import { useWebSocket } from "@/hooks/useWebSocket";
 import {
-  ClientPathElement,
+  ClientElement,
   transferClientPathToServer,
   useDocumentStore,
 } from "@/state/store";
 import {
-  DocumentStateUpdate,
   MessageCommand,
   MessageType,
   StateMessageCommands,
@@ -32,7 +31,7 @@ export default function CanvasScreen() {
 
   // Does this need to be here?
   const sendLocalState = useCallback(
-    <T extends ClientPathElement>(type: StateMessageCommands, payload: T) => {
+    <T extends ClientElement>(type: StateMessageCommands, payload: T) => {
       if (!documentId) return;
       bufferMessage({
         type: MessageType.STATE,

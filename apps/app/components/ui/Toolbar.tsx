@@ -1,19 +1,20 @@
 import useRect from "@/features/hooks/useRect";
-import { ClientPathElement, useDocumentStore } from "@/state/store";
+import { ClientElement, useDocumentStore } from "@/state/store";
 import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
 interface ToolbarProps {
-  sendLocalState: <T extends ClientPathElement>(
+  sendLocalState: <T extends ClientElement>(
     type: StateMessageCommands,
     payload: T
   ) => void;
 }
 
 export default function Toolbar({ sendLocalState }: ToolbarProps) {
-  const { removeElement, elements, canvasMatrix, addElement } =
-    useDocumentStore((state) => state);
-  const { createRectPath } = useRect(canvasMatrix);
+  const { removeElement, elements, addElement } = useDocumentStore(
+    (state) => state
+  );
+  const { createRectPath } = useRect();
 
   const undoPath = () => {
     // TODO: Only pop the updates that the client has made itself
@@ -22,13 +23,14 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
 
     if (!elements.length) return;
     const lastElement = removeElement(
-      (elements[elements.length - 1] as ClientPathElement).id
+      (elements[elements.length - 1] as ClientElement).id
     );
     if (!lastElement) return;
 
-    sendLocalState(MessageCommand.DELETE, lastElement as ClientPathElement);
+    sendLocalState(MessageCommand.DELETE, lastElement);
   };
 
+  // Here or in the useRect hook?
   const addRectPathToStore = () =>
     sendLocalState(MessageCommand.ADD, addElement(createRectPath()));
 
