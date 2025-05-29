@@ -107,7 +107,7 @@ export const useDocumentStore = create<State & Actions>((set, get) => ({
     const newPath = Skia.Path.Make();
     const r = newPath.addRect(
       rect(
-        shiftX ? path.properties.x + shiftX : path.properties.x,
+        shiftX ?? path.properties.x,
         path.properties.y,
         newWidth,
         path.properties.height
@@ -122,7 +122,7 @@ export const useDocumentStore = create<State & Actions>((set, get) => ({
             properties: {
               ...el.properties,
               path: r,
-              x: shiftX ? path.properties.x + shiftX : path.properties.x,
+              x: shiftX ?? path.properties.x,
               focalX: newWidth / 2,
               width: newWidth,
             },
@@ -141,7 +141,7 @@ export const useDocumentStore = create<State & Actions>((set, get) => ({
     const r = newPath.addRect(
       rect(
         path.properties.x,
-        shiftY ? path.properties.y + shiftY : path.properties.y,
+        shiftY ?? path.properties.y,
         path.properties.width,
         newHeight
       )
@@ -155,7 +155,7 @@ export const useDocumentStore = create<State & Actions>((set, get) => ({
             properties: {
               ...el.properties,
               path: r,
-              y: shiftY ? path.properties.y + shiftY : path.properties.y,
+              y: shiftY ?? path.properties.y,
               focalY: newHeight / 2,
               height: newHeight,
             },

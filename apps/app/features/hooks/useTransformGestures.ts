@@ -1,6 +1,6 @@
 import { useDocumentStore } from "@/state/store";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";
 import { runOnJS, SharedValue, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
@@ -20,6 +20,8 @@ interface TransformGesturesProps {
   width: number;
   id: string;
   height: number;
+  x: number;
+  y: number;
   focalY: number;
   updatePath: (params: Matrix4) => void;
 }
@@ -33,6 +35,8 @@ export default function useTransformGestures({
   updatePath,
   matrix,
   width,
+  x,
+  y,
   height,
   id,
   focalX,
@@ -44,66 +48,143 @@ export default function useTransformGestures({
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
 
-  const [dragDir, setDragDir] = useState<DragDirection>(DragDirection.NONE);
+  const widthResizeTimeout = useSharedValue<number | null>(null);
+  const heightResizeTimeout = useSharedValue<number | null>(null);
+
+  const debouncedWidthUpdateArgs = useSharedValue<any>(null);
+  const debouncedHeightUpdateArgs = useSharedValue<any>(null);
+
+  const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
+
+  const performWidthUpdate = (args: any) => {
+    if (!args) return;
+    editRectWidth(args.id, Math.max(1, args.newWidth), args.x);
+  };
+
+  const performHeightUpdate = (args: any) => {
+    if (!args) return;
+    editRectHeight(args.id, Math.max(1, args.newHeight), args.y);
+  };
 
   const updateOnEnd = useCallback(() => {
     "worklet";
     updatePath(matrix.value);
   }, [savedMatrix, matrix, updatePath]);
 
-  // Better stretch logic with boolean checks = pressed on start, etc
   const pan = Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
     .onBegin((e) => {
       "worklet";
+
       if (stretchable) {
         if (Math.abs(width / 2 - (e.x - focalX)) < 50) {
-          runOnJS(setDragDir)(DragDirection.RIGHT);
+          dragDir.value = DragDirection.RIGHT;
         } else if (Math.abs(-height / 2 + (e.y - focalY)) < 50) {
-          runOnJS(setDragDir)(DragDirection.DOWN);
+          dragDir.value = DragDirection.DOWN;
         } else if (Math.abs(width / 2 - (focalX - e.x)) < 50) {
-          runOnJS(setDragDir)(DragDirection.LEFT);
+          dragDir.value = DragDirection.LEFT;
         } else if (Math.abs(height / 2 - (focalY - e.y)) < 50) {
-          runOnJS(setDragDir)(DragDirection.UP);
+          dragDir.value = DragDirection.UP;
         }
       }
     })
     .onChange((e) => {
       "worklet";
 
-      // Debounce the updates
-      // Update speeds?
-
-      switch (dragDir) {
+      switch (dragDir.value) {
         case DragDirection.NONE:
           matrix.value = multiply4(
             translate(e.changeX, e.changeY, 0),
             matrix.value
           );
-          updateOnEnd();
+          updateOnEnd(); // Throttle this
           break;
         case DragDirection.RIGHT:
-          editRectWidth(id, width + e.changeX);
+          debouncedWidthUpdateArgs.value = {
+            id,
+            newWidth: width + e.changeX,
+          };
+          if (widthResizeTimeout.value !== null) {
+            runOnJS(clearTimeout)(widthResizeTimeout.value);
+          }
+          widthResizeTimeout.value = runOnJS(setTimeout)(() => {
+            runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
+            debouncedWidthUpdateArgs.value = null;
+          }, 300) as any;
+
           break;
         case DragDirection.LEFT:
-          editRectWidth(id, width - e.changeX, e.changeX);
+          debouncedWidthUpdateArgs.value = {
+            id,
+            newWidth: width - e.changeX,
+            x: x + e.changeX,
+          };
+          if (widthResizeTimeout.value !== null) {
+            runOnJS(clearTimeout)(widthResizeTimeout.value);
+          }
+          widthResizeTimeout.value = runOnJS(setTimeout)(() => {
+            runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
+            debouncedWidthUpdateArgs.value = null;
+          }, 300) as any;
+
           break;
         case DragDirection.UP:
-          editRectHeight(id, height - e.changeY, e.changeY);
+          debouncedHeightUpdateArgs.value = {
+            id,
+            newHeight: height - e.changeY,
+            y: y + e.changeY,
+          };
+          if (heightResizeTimeout.value !== null) {
+            runOnJS(clearTimeout)(heightResizeTimeout.value);
+          }
+          heightResizeTimeout.value = runOnJS(setTimeout)(() => {
+            runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
+            debouncedHeightUpdateArgs.value = null;
+          }, 300) as any;
+
           break;
         case DragDirection.DOWN:
-          editRectHeight(id, height + e.changeY);
+          debouncedHeightUpdateArgs.value = {
+            id,
+            newHeight: height + e.changeY,
+          };
+          if (heightResizeTimeout.value !== null) {
+            runOnJS(clearTimeout)(heightResizeTimeout.value);
+          }
+          heightResizeTimeout.value = runOnJS(setTimeout)(() => {
+            runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
+            debouncedHeightUpdateArgs.value = null;
+          }, 300) as any;
+
           break;
         default:
-          console.warn("Unknown drag direction:", dragDir);
+          console.warn("Unknown drag direction", dragDir);
           break;
       }
     })
     .onEnd(() => {
       "worklet";
-      if (dragDir !== DragDirection.NONE) {
-        runOnJS(setDragDir)(DragDirection.NONE);
+
+      if (widthResizeTimeout.value !== null) {
+        runOnJS(clearTimeout)(widthResizeTimeout.value);
+        widthResizeTimeout.value = null;
+        if (debouncedWidthUpdateArgs.value) {
+          runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
+          debouncedWidthUpdateArgs.value = null;
+        }
+      }
+      if (heightResizeTimeout.value !== null) {
+        runOnJS(clearTimeout)(heightResizeTimeout.value);
+        heightResizeTimeout.value = null;
+        if (debouncedHeightUpdateArgs.value) {
+          runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
+          debouncedHeightUpdateArgs.value = null;
+        }
+      }
+
+      if (dragDir.value !== DragDirection.NONE) {
+        dragDir.value = DragDirection.NONE;
         updateOnEnd();
       }
     });

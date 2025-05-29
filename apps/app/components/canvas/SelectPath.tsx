@@ -65,6 +65,8 @@ export default function SelectPath({
     matrix,
     focalX,
     width,
+    x,
+    y,
     id,
     height,
     stretchable,
