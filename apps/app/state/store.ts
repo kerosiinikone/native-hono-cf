@@ -10,6 +10,8 @@ import { Matrix4, rect, Skia, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 
+// TODO: Helpers and more elegent logic
+
 export type ClientObject = {
   path: SkPath;
   x: number;
@@ -38,11 +40,6 @@ type State = {
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
-
-  // Separate actions for editing rectangle dimensions
-  editRectWidth: (id: string, width: number, shift?: number) => void;
-  editRectHeight: (id: string, height: number, shift?: number) => void;
-
   setLocalFromServerState: (
     serverState:
       | DocumentStateUpdate
@@ -51,12 +48,17 @@ type Actions = {
         },
     command: MessageCommand
   ) => void;
-  addElement: (elementData: ClientObject) => ClientElement;
+  addElement: (elementData: ClientObject, type?: ElementType) => ClientElement;
   removeElement: (id: string) => ClientElement | null;
   updateElementMatrix: (
     elementId: string,
     newMatrix: Matrix4
   ) => ClientElement | null;
+};
+
+type RectActions = {
+  editRectWidth: (id: string, newWidth: number, shiftX?: number) => void;
+  editRectHeight: (id: string, newHeight: number, shiftY?: number) => void;
 };
 
 function transformServerPathToClient(
@@ -88,156 +90,155 @@ export function transferClientPathToServer(clientPath: ClientElement): Element {
   };
 }
 
-export const useDocumentStore = create<State & Actions>((set, get) => ({
-  documentId: "289d4f3c-3617-45cb-a696-15ed24386388", // test
-  elements: [],
-  drawingMode: "draw",
-  canvasMatrix: makeMutable(Matrix4()),
+export const useDocumentStore = create<State & Actions & RectActions>(
+  (set, get) => ({
+    documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
+    elements: [],
+    drawingMode: "draw",
+    canvasMatrix: makeMutable(Matrix4()),
 
-  setDocumentId: (id) => set({ documentId: id }),
+    setDocumentId: (id) => set({ documentId: id }),
+    setDrawingMode: (mode) => set({ drawingMode: mode }),
 
-  setDrawingMode: (mode) => set({ drawingMode: mode }),
+    // Optimize
+    editRectWidth: (id, newWidth, shiftX) => {
+      const path = get().elements.find((el) => el.id === id);
+      if (!path || path.type !== ElementType.Rect) return;
 
-  // Optimize
-  editRectWidth: (id, newWidth, shiftX) => {
-    const path = get().elements.find((el) => el.id === id);
-    if (!path || path.type !== ElementType.Path) return;
+      const newPath = Skia.Path.Make();
+      const r = newPath.addRect(
+        rect(
+          shiftX ?? path.properties.x,
+          path.properties.y,
+          newWidth,
+          path.properties.height
+        )
+      );
 
-    // why not make path mutable in the first place and reassign it here?
-    const newPath = Skia.Path.Make();
-    const r = newPath.addRect(
-      rect(
-        shiftX ?? path.properties.x,
-        path.properties.y,
-        newWidth,
-        path.properties.height
-      )
-    );
-
-    set((state) => ({
-      elements: state.elements.map((el) => {
-        if (el.id === id) {
-          return {
-            ...el,
-            properties: {
-              ...el.properties,
-              path: r,
-              x: shiftX ?? path.properties.x,
-              focalX: newWidth / 2,
-              width: newWidth,
-            },
-          };
-        }
-        return el;
-      }),
-    }));
-  },
-
-  editRectHeight: (id, newHeight, shiftY) => {
-    const path = get().elements.find((el) => el.id === id);
-    if (!path || path.type !== ElementType.Path) return;
-
-    const newPath = Skia.Path.Make();
-    const r = newPath.addRect(
-      rect(
-        path.properties.x,
-        shiftY ?? path.properties.y,
-        path.properties.width,
-        newHeight
-      )
-    );
-
-    set((state) => ({
-      elements: state.elements.map((el) => {
-        if (el.id === id) {
-          return {
-            ...el,
-            properties: {
-              ...el.properties,
-              path: r,
-              y: shiftY ?? path.properties.y,
-              focalY: newHeight / 2,
-              height: newHeight,
-            },
-          };
-        }
-        return el;
-      }),
-    }));
-  },
-
-  setLocalFromServerState: (serverState, cmd) => {
-    if (cmd === MessageCommand.DELETE) {
-      const elementIds = (
-        serverState as {
-          elementIds: string[];
-        }
-      ).elementIds;
       set((state) => ({
-        elements: state.elements.filter((el) => !elementIds.includes(el.id)),
+        elements: state.elements.map((el) => {
+          if (el.id === id) {
+            return {
+              ...el,
+              properties: {
+                ...el.properties,
+                path: r,
+                x: shiftX ?? path.properties.x,
+                focalX: newWidth / 2,
+                width: newWidth,
+              },
+            };
+          }
+          return el;
+        }),
       }));
-      return;
-    }
-    if (cmd === MessageCommand.UPDATE) {
-      set(({ elements }) => ({
-        elements: elements.map((el) =>
-          el.id === (serverState as PathElement).id
-            ? transformServerPathToClient({
-                ...el,
-                properties: (serverState as PathElement).properties,
-              })
-            : el
-        ) as ClientElement[],
+    },
+
+    editRectHeight: (id, newHeight, shiftY) => {
+      const path = get().elements.find((el) => el.id === id);
+      if (!path || path.type !== ElementType.Rect) return;
+
+      const newPath = Skia.Path.Make();
+      const r = newPath.addRect(
+        rect(
+          path.properties.x,
+          shiftY ?? path.properties.y,
+          path.properties.width,
+          newHeight
+        )
+      );
+
+      set((state) => ({
+        elements: state.elements.map((el) => {
+          if (el.id === id) {
+            return {
+              ...el,
+              properties: {
+                ...el.properties,
+                path: r,
+                y: shiftY ?? path.properties.y,
+                focalY: newHeight / 2,
+                height: newHeight,
+              },
+            };
+          }
+          return el;
+        }),
       }));
-      return;
-    }
-    set((state) => ({
-      elements: state.elements.concat(
-        [serverState as DocumentStateUpdate]
-          .flat()
-          .filter((el) => el.type === "path")
-          .map((el) => transformServerPathToClient(el as PathElement))
-          .filter(Boolean) as ClientElement[]
-      ),
-    }));
-  },
+    },
 
-  addElement: (elementData) => {
-    const newElement: ClientElement = {
-      id: crypto.randomUUID(),
-      type: ElementType.Path,
-      properties: elementData,
-    };
-    set((state) => ({
-      elements: [...state.elements, newElement],
-    }));
-    return newElement;
-  },
-
-  removeElement: (id) => {
-    let removedElement: ClientElement | null = null;
-    set((state) => ({
-      elements: state.elements.filter((el) => {
-        if (el.id === id) {
-          removedElement = el;
-          return false;
-        }
-        return true;
-      }),
-    }));
-    return removedElement;
-  },
-
-  updateElementMatrix: (elementId, newMatrix) => {
-    let updatedElement: ClientElement | null = null;
-    set((state) => {
-      const element = state.elements.find((el) => el.id === elementId);
-      if (element && element.properties.matrix) {
-        updatedElement = element;
-        element.properties.matrix.value = newMatrix;
+    setLocalFromServerState: (serverState, cmd) => {
+      if (cmd === MessageCommand.DELETE) {
+        const elementIds = (
+          serverState as {
+            elementIds: string[];
+          }
+        ).elementIds;
+        set((state) => ({
+          elements: state.elements.filter((el) => !elementIds.includes(el.id)),
+        }));
+        return;
       }
-      return { elements: [...state.elements] };
-    });
-    return updatedElement;
-  },
-}));
+      if (cmd === MessageCommand.UPDATE) {
+        set(({ elements }) => ({
+          elements: elements.map((el) =>
+            el.id === (serverState as PathElement).id
+              ? transformServerPathToClient({
+                  ...el,
+                  properties: (serverState as PathElement).properties,
+                })
+              : el
+          ) as ClientElement[],
+        }));
+        return;
+      }
+      set((state) => ({
+        elements: state.elements.concat(
+          [serverState as DocumentStateUpdate]
+            .flat()
+            .map((el) => transformServerPathToClient(el))
+            .filter(Boolean) as ClientElement[]
+        ),
+      }));
+    },
+
+    addElement: (elementData, type) => {
+      const newElement: ClientElement = {
+        id: crypto.randomUUID(),
+        type: type ?? ElementType.Path,
+        properties: elementData,
+      };
+      set((state) => ({
+        elements: [...state.elements, newElement],
+      }));
+      return newElement;
+    },
+
+    removeElement: (id) => {
+      let removedElement: ClientElement | null = null;
+      set((state) => ({
+        elements: state.elements.filter((el) => {
+          if (el.id === id) {
+            removedElement = el;
+            return false;
+          }
+          return true;
+        }),
+      }));
+      return removedElement;
+    },
+
+    updateElementMatrix: (elementId, newMatrix) => {
+      let updatedElement: ClientElement | null = null;
+      set((state) => {
+        const element = state.elements.find((el) => el.id === elementId);
+        if (element && element.properties.matrix) {
+          updatedElement = element;
+          element.properties.matrix.value = newMatrix;
+        }
+        return { elements: [...state.elements] };
+      });
+      return updatedElement;
+    },
+  })
+);

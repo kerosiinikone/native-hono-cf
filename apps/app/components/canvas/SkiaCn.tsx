@@ -58,6 +58,7 @@ export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
         elements.map((el, i) => (
           <SelectPath
             key={i}
+            pathType={el.type}
             id={el.id}
             {...el.properties}
             canvasMatrix={canvasMatrix}

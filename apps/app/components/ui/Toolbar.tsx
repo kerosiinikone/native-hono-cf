@@ -1,6 +1,11 @@
-import useRect from "@/features/hooks/useRect";
+import useCircle from "@/features/hooks/shapes/useCircle";
+import useRect from "@/features/hooks/shapes/useRect";
 import { ClientElement, useDocumentStore } from "@/state/store";
-import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
+import {
+  ElementType,
+  MessageCommand,
+  StateMessageCommands,
+} from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
 interface ToolbarProps {
@@ -14,7 +19,9 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
   const { removeElement, elements, addElement } = useDocumentStore(
     (state) => state
   );
+
   const { createRectPath } = useRect();
+  const { createCirclePath } = useCircle();
 
   const undoPath = () => {
     // TODO: Only pop the updates that the client has made itself
@@ -32,7 +39,16 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
 
   // Here or in the useRect hook?
   const addRectPathToStore = () =>
-    sendLocalState(MessageCommand.ADD, addElement(createRectPath()));
+    sendLocalState(
+      MessageCommand.ADD,
+      addElement(createRectPath(), ElementType.Rect)
+    );
+
+  const addRCirclePathToStore = () =>
+    sendLocalState(
+      MessageCommand.ADD,
+      addElement(createCirclePath(), ElementType.Circle)
+    );
 
   return (
     <View style={styles.container}>
@@ -41,6 +57,11 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
         title="Rectangle"
         color="rgb(174, 0, 255)"
         onPress={addRectPathToStore}
+      />
+      <Button
+        title="Circle"
+        color="rgb(0, 255, 42)"
+        onPress={addRCirclePathToStore}
       />
     </View>
   );

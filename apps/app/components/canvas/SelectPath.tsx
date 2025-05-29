@@ -1,12 +1,13 @@
 import useTransformGestures, {
   multiply,
 } from "@/features/hooks/useTransformGestures";
+import { ElementType } from "@native-hono-cf/shared";
 import {
   convertToAffineMatrix,
   convertToColumnMajor,
   Matrix4,
-  SkPath,
 } from "@shopify/react-native-skia";
+import { StyleSheet } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   SharedValue,
@@ -14,12 +15,28 @@ import Animated, {
 } from "react-native-reanimated";
 import { translate } from "react-native-redash";
 
+interface SelectPathProps {
+  matrix: SharedValue<Matrix4>;
+  canvasMatrix: SharedValue<Matrix4>;
+  x: number;
+  y: number;
+  focalX: number;
+  id: string;
+  pathType: ElementType;
+  focalY: number;
+  stretchable: boolean;
+  width: number;
+  height: number;
+
+  updatePath: (params: Matrix4) => void;
+}
+
 function computeFinalTransformMatrix(
   canvasMatrix: SharedValue<Matrix4>,
   matrix: SharedValue<Matrix4>,
   focalX: number,
   focalY: number
-) {
+): number[] {
   const finalMatrix = multiply(canvasMatrix.value, matrix.value);
 
   const localCenterX = focalX;
@@ -35,6 +52,10 @@ function computeFinalTransformMatrix(
   return convertToAffineMatrix(finalTransformMatrixForStyle);
 }
 
+function isCircle(type: ElementType): boolean {
+  return type === ElementType.Circle;
+}
+
 export default function SelectPath({
   matrix,
   x,
@@ -42,24 +63,13 @@ export default function SelectPath({
   stretchable,
   width,
   focalX,
+  pathType,
   focalY,
   id,
   height,
   canvasMatrix,
   updatePath,
-}: {
-  matrix: SharedValue<Matrix4>;
-  canvasMatrix: SharedValue<Matrix4>;
-  x: number;
-  y: number;
-  focalX: number;
-  id: string;
-  focalY: number;
-  stretchable: boolean;
-  width: number;
-  height: number;
-  updatePath: (params: Matrix4) => void;
-}) {
+}: SelectPathProps) {
   const gesture = useTransformGestures({
     updatePath, // useCallback?
     matrix,
@@ -74,12 +84,11 @@ export default function SelectPath({
   });
 
   const style = useAnimatedStyle(() => ({
-    position: "absolute",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    left: x,
-    top: y,
-    width: width,
-    height: height,
+    ...trivStyles.path,
+    left: x - (isCircle(pathType) ? focalX * 2 : 0),
+    top: y - (isCircle(pathType) ? focalY * 2 : 0),
+    width,
+    height,
     transform: [
       {
         matrix: computeFinalTransformMatrix(
@@ -100,3 +109,10 @@ export default function SelectPath({
     </>
   );
 }
+
+const trivStyles = StyleSheet.create({
+  path: {
+    position: "absolute",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+});

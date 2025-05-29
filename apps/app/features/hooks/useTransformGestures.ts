@@ -26,6 +26,13 @@ interface TransformGesturesProps {
   updatePath: (params: Matrix4) => void;
 }
 
+// TODO: Optimize the resizing animation and
+// make more generic for future shapes !!!
+
+const SPEED_FACTOR = 1.2;
+const MIN_WIDTH = 1;
+const MIN_HEIGHT = 1;
+
 export function multiply(...matrices: Matrix4[]) {
   "worklet";
   return matrices.reduce((acc, matrix) => multiply4(acc, matrix), Matrix4());
@@ -58,12 +65,12 @@ export default function useTransformGestures({
 
   const performWidthUpdate = (args: any) => {
     if (!args) return;
-    editRectWidth(args.id, Math.max(1, args.newWidth), args.x);
+    editRectWidth(args.id, Math.max(MIN_WIDTH, args.newWidth), args.x);
   };
 
   const performHeightUpdate = (args: any) => {
     if (!args) return;
-    editRectHeight(args.id, Math.max(1, args.newHeight), args.y);
+    editRectHeight(args.id, Math.max(MIN_HEIGHT, args.newHeight), args.y);
   };
 
   const updateOnEnd = useCallback(() => {
@@ -103,7 +110,7 @@ export default function useTransformGestures({
         case DragDirection.RIGHT:
           debouncedWidthUpdateArgs.value = {
             id,
-            newWidth: width + e.changeX,
+            newWidth: width + e.changeX * SPEED_FACTOR,
           };
           if (widthResizeTimeout.value !== null) {
             runOnJS(clearTimeout)(widthResizeTimeout.value);
@@ -111,14 +118,14 @@ export default function useTransformGestures({
           widthResizeTimeout.value = runOnJS(setTimeout)(() => {
             runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
             debouncedWidthUpdateArgs.value = null;
-          }, 300) as any;
+          }, 100) as any;
 
           break;
         case DragDirection.LEFT:
           debouncedWidthUpdateArgs.value = {
             id,
-            newWidth: width - e.changeX,
-            x: x + e.changeX,
+            newWidth: width - e.changeX * SPEED_FACTOR,
+            x: x + e.changeX * SPEED_FACTOR,
           };
           if (widthResizeTimeout.value !== null) {
             runOnJS(clearTimeout)(widthResizeTimeout.value);
@@ -126,14 +133,14 @@ export default function useTransformGestures({
           widthResizeTimeout.value = runOnJS(setTimeout)(() => {
             runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
             debouncedWidthUpdateArgs.value = null;
-          }, 300) as any;
+          }, 100) as any;
 
           break;
         case DragDirection.UP:
           debouncedHeightUpdateArgs.value = {
             id,
-            newHeight: height - e.changeY,
-            y: y + e.changeY,
+            newHeight: height - e.changeY * SPEED_FACTOR,
+            y: y + e.changeY * SPEED_FACTOR,
           };
           if (heightResizeTimeout.value !== null) {
             runOnJS(clearTimeout)(heightResizeTimeout.value);
@@ -141,13 +148,13 @@ export default function useTransformGestures({
           heightResizeTimeout.value = runOnJS(setTimeout)(() => {
             runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
             debouncedHeightUpdateArgs.value = null;
-          }, 300) as any;
+          }, 100) as any;
 
           break;
         case DragDirection.DOWN:
           debouncedHeightUpdateArgs.value = {
             id,
-            newHeight: height + e.changeY,
+            newHeight: height + e.changeY * SPEED_FACTOR,
           };
           if (heightResizeTimeout.value !== null) {
             runOnJS(clearTimeout)(heightResizeTimeout.value);
@@ -155,7 +162,7 @@ export default function useTransformGestures({
           heightResizeTimeout.value = runOnJS(setTimeout)(() => {
             runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
             debouncedHeightUpdateArgs.value = null;
-          }, 300) as any;
+          }, 100) as any;
 
           break;
         default:

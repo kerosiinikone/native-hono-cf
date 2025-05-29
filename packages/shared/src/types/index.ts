@@ -1,12 +1,13 @@
 import { Matrix4 } from "react-native-redash";
 
-// TODO: Concat types from store and components
+// TODO: Split into multiple files for better organization
 
 export type DrawingMode = "draw" | "select" | "move";
 
 export enum ElementType {
   Path = "path",
   Rect = "rect",
+  Circle = "circle",
 }
 
 export enum MessageType {
@@ -56,6 +57,11 @@ export interface RectPathElementProperties extends BaseElementProperties {
   path: string;
   stretchable: true;
 }
+
+// export interface CirclePathElementProperties extends BaseElementProperties {
+//   path: string;
+//   stretchable: false;
+// }
 
 export type Element = {
   id: string;
