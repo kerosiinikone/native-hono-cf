@@ -85,8 +85,8 @@ export default function SelectPath({
 
   const style = useAnimatedStyle(() => ({
     ...trivStyles.path,
-    left: x - (isCircle(pathType) ? focalX * 2 : 0),
-    top: y - (isCircle(pathType) ? focalY * 2 : 0),
+    left: x - (isCircle(pathType) ? width / 2 : 0),
+    top: y - (isCircle(pathType) ? height / 2 : 0),
     width,
     height,
     transform: [

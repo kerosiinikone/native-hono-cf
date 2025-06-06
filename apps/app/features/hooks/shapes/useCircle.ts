@@ -23,8 +23,8 @@ export default function useCircle() {
       path: sharedCirc.value.copy(),
       x,
       y,
-      focalX: radius / 2, // Check with phone ???
-      focalY: radius / 2, // Check with phone ???
+      focalX: x,
+      focalY: y,
       width: radius * 2,
       height: radius * 2,
       matrix: makeMutable(

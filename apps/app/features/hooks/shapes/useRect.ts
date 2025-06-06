@@ -5,7 +5,6 @@ import { useWindowDimensions } from "react-native";
 import { makeMutable, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
-// Enable stretch and resizing of the rectangle
 export default function useRect() {
   const { canvasMatrix } = useDocumentStore((state) => state);
   const { width, height } = useWindowDimensions();
@@ -25,8 +24,8 @@ export default function useRect() {
       path: sharedRect.value.copy(),
       x,
       y,
-      focalX: rWidth / 2, // Check with phone ???
-      focalY: rHeight / 2, // Check with phone ???
+      focalX: x + rWidth / 2,
+      focalY: y + rHeight / 2,
       width: rWidth,
       height: rHeight,
       matrix: makeMutable(

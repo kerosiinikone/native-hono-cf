@@ -11,16 +11,9 @@ import {
   WSMessage,
 } from "@native-hono-cf/shared";
 import { D1Persistence, DocumentStorage } from "./persistence";
+import { debounce } from "./util";
 
 const DEBOUNCE = 5000;
-
-function debounce<T extends (...args: any[]) => void>(fn: T, delay: number) {
-  let timeoutId: any | null = null;
-  return (...args: Parameters<T>) => {
-    if (timeoutId) clearTimeout(timeoutId);
-    timeoutId = setTimeout(() => fn(...args), delay);
-  };
-}
 
 export class DocumentSession {
   private clientMap: Map<WebSocket, string> = new Map();
@@ -50,7 +43,7 @@ export class DocumentSession {
     if (!loadedState && initialD1State) {
       loadedState = initialD1State;
     }
-    this.state = loadedState || { elements: [] };
+    this.state = loadedState || this.state;
 
     await this.durableObjectStorage._putState(this.state);
   }
@@ -181,6 +174,7 @@ export class DocumentSession {
                 "[DocumentSession] Unknown method for STATE update:",
                 command
               );
+              // TODO: separate functions for each command?
               ws.send(
                 JSON.stringify({
                   type: MessageType.ERROR,
@@ -246,7 +240,6 @@ export class DocumentSession {
   }
 
   async persistState(): Promise<void> {
-    // Local storage
     await this.durableObjectStorage._putState(this.state);
     if (this.d1Persistence) {
       this.debouncedPersistToD1();

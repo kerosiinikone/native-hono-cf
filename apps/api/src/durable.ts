@@ -17,8 +17,7 @@ export class WebSocketServer extends DurableObject {
 
       this.session = new DocumentSession(doStorage, d1Persistence);
 
-      const initialD1State = await d1Persistence.loadState();
-      await this.session.initialize(initialD1State);
+      await this.session.initialize(await d1Persistence.loadState());
     });
   }
 

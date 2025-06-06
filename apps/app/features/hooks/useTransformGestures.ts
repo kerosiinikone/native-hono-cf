@@ -29,9 +29,11 @@ interface TransformGesturesProps {
 // TODO: Optimize the resizing animation and
 // make more generic for future shapes !!!
 
-const SPEED_FACTOR = 1.2;
+const SPEED_FACTOR = 2;
 const MIN_WIDTH = 1;
 const MIN_HEIGHT = 1;
+const DEFAULT_AREA_OF_INTERACTION = 30;
+const THROTTLE_AMOUNT = 10;
 
 export function multiply(...matrices: Matrix4[]) {
   "worklet";
@@ -54,12 +56,7 @@ export default function useTransformGestures({
 
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
-
-  const widthResizeTimeout = useSharedValue<number | null>(null);
-  const heightResizeTimeout = useSharedValue<number | null>(null);
-
-  const debouncedWidthUpdateArgs = useSharedValue<any>(null);
-  const debouncedHeightUpdateArgs = useSharedValue<any>(null);
+  const clock = useSharedValue(0);
 
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
 
@@ -85,13 +82,16 @@ export default function useTransformGestures({
       "worklet";
 
       if (stretchable) {
-        if (Math.abs(width / 2 - (e.x - focalX)) < 50) {
+        if (Math.abs(width - e.x) < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.RIGHT;
-        } else if (Math.abs(-height / 2 + (e.y - focalY)) < 50) {
+        } else if (Math.abs(height - e.y) < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.DOWN;
-        } else if (Math.abs(width / 2 - (focalX - e.x)) < 50) {
+        } else if (e.x < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.LEFT;
-        } else if (Math.abs(height / 2 - (focalY - e.y)) < 50) {
+        } else if (
+          Math.abs(height - e.y) >
+          Math.abs(height - DEFAULT_AREA_OF_INTERACTION)
+        ) {
           dragDir.value = DragDirection.UP;
         }
       }
@@ -99,71 +99,49 @@ export default function useTransformGestures({
     .onChange((e) => {
       "worklet";
 
+      clock.value += 1; // Simple throttling
+
       switch (dragDir.value) {
         case DragDirection.NONE:
           matrix.value = multiply4(
             translate(e.changeX, e.changeY, 0),
             matrix.value
           );
-          updateOnEnd(); // Throttle this
+          updateOnEnd();
           break;
         case DragDirection.RIGHT:
-          debouncedWidthUpdateArgs.value = {
-            id,
-            newWidth: width + e.changeX * SPEED_FACTOR,
-          };
-          if (widthResizeTimeout.value !== null) {
-            runOnJS(clearTimeout)(widthResizeTimeout.value);
+          if (clock.value % THROTTLE_AMOUNT === 0) {
+            performWidthUpdate({
+              id,
+              newWidth: width + e.changeX * SPEED_FACTOR,
+            });
           }
-          widthResizeTimeout.value = runOnJS(setTimeout)(() => {
-            runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
-            debouncedWidthUpdateArgs.value = null;
-          }, 100) as any;
-
           break;
         case DragDirection.LEFT:
-          debouncedWidthUpdateArgs.value = {
-            id,
-            newWidth: width - e.changeX * SPEED_FACTOR,
-            x: x + e.changeX * SPEED_FACTOR,
-          };
-          if (widthResizeTimeout.value !== null) {
-            runOnJS(clearTimeout)(widthResizeTimeout.value);
+          if (clock.value % THROTTLE_AMOUNT === 0) {
+            performWidthUpdate({
+              id,
+              newWidth: width - e.changeX * SPEED_FACTOR,
+              x: x + e.changeX * SPEED_FACTOR,
+            });
           }
-          widthResizeTimeout.value = runOnJS(setTimeout)(() => {
-            runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
-            debouncedWidthUpdateArgs.value = null;
-          }, 100) as any;
-
           break;
         case DragDirection.UP:
-          debouncedHeightUpdateArgs.value = {
-            id,
-            newHeight: height - e.changeY * SPEED_FACTOR,
-            y: y + e.changeY * SPEED_FACTOR,
-          };
-          if (heightResizeTimeout.value !== null) {
-            runOnJS(clearTimeout)(heightResizeTimeout.value);
+          if (clock.value % THROTTLE_AMOUNT === 0) {
+            performHeightUpdate({
+              id,
+              newHeight: height - e.changeY * SPEED_FACTOR,
+              y: y + e.changeY * SPEED_FACTOR,
+            });
           }
-          heightResizeTimeout.value = runOnJS(setTimeout)(() => {
-            runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
-            debouncedHeightUpdateArgs.value = null;
-          }, 100) as any;
-
           break;
         case DragDirection.DOWN:
-          debouncedHeightUpdateArgs.value = {
-            id,
-            newHeight: height + e.changeY * SPEED_FACTOR,
-          };
-          if (heightResizeTimeout.value !== null) {
-            runOnJS(clearTimeout)(heightResizeTimeout.value);
+          if (clock.value % THROTTLE_AMOUNT === 0) {
+            performHeightUpdate({
+              id,
+              newHeight: height + e.changeY * SPEED_FACTOR,
+            });
           }
-          heightResizeTimeout.value = runOnJS(setTimeout)(() => {
-            runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
-            debouncedHeightUpdateArgs.value = null;
-          }, 100) as any;
-
           break;
         default:
           console.warn("Unknown drag direction", dragDir);
@@ -172,31 +150,17 @@ export default function useTransformGestures({
     })
     .onEnd(() => {
       "worklet";
-
-      if (widthResizeTimeout.value !== null) {
-        runOnJS(clearTimeout)(widthResizeTimeout.value);
-        widthResizeTimeout.value = null;
-        if (debouncedWidthUpdateArgs.value) {
-          runOnJS(performWidthUpdate)(debouncedWidthUpdateArgs.value);
-          debouncedWidthUpdateArgs.value = null;
-        }
-      }
-      if (heightResizeTimeout.value !== null) {
-        runOnJS(clearTimeout)(heightResizeTimeout.value);
-        heightResizeTimeout.value = null;
-        if (debouncedHeightUpdateArgs.value) {
-          runOnJS(performHeightUpdate)(debouncedHeightUpdateArgs.value);
-          debouncedHeightUpdateArgs.value = null;
-        }
-      }
-
       if (dragDir.value !== DragDirection.NONE) {
         dragDir.value = DragDirection.NONE;
         updateOnEnd();
       }
     });
 
-  const rotate = Gesture.Rotation()
+  // Matrix rotation causes edge dragging issues -> deal with it later
+  // One option is the deapply the rotation to the matrix and the apply it back after
+  // the edge dragging is done ???
+
+  Gesture.Rotation()
     .onBegin(() => {
       "worklet";
       origin.value = {
@@ -233,5 +197,5 @@ export default function useTransformGestures({
       updateOnEnd();
     });
 
-  return Gesture.Simultaneous(pan, pinch, rotate);
+  return Gesture.Simultaneous(pan, pinch);
 }

@@ -11,6 +11,7 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 
 // TODO: Helpers and more elegent logic
+// TODO: Immer
 
 export type ClientObject = {
   path: SkPath;
@@ -40,6 +41,7 @@ type State = {
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
+  flushState: () => void;
   setLocalFromServerState: (
     serverState:
       | DocumentStateUpdate
@@ -61,31 +63,31 @@ type RectActions = {
   editRectHeight: (id: string, newHeight: number, shiftY?: number) => void;
 };
 
-function transformServerPathToClient(
-  serverPath: Element
-): ClientElement | null {
-  if (!serverPath.properties.path) return null;
-  const skPath = Skia.Path.MakeFromSVGString(serverPath.properties.path);
+// Make it clearer which element is being handled with types (PathElementProperties, RectPathElementProperties, etc.)
+
+function transformServerObjectToClient(el: Element): ClientElement | null {
+  if (!el.properties.path) return null;
+  const skPath = Skia.Path.MakeFromSVGString(el.properties.path);
   if (!skPath) return null;
   return {
-    id: serverPath.id,
-    type: serverPath.type,
+    id: el.id,
+    type: el.type,
     properties: {
-      ...serverPath.properties,
+      ...el.properties,
       path: skPath,
-      matrix: makeMutable(serverPath.properties.matrix),
+      matrix: makeMutable(el.properties.matrix),
     },
   };
 }
 
-export function transferClientPathToServer(clientPath: ClientElement): Element {
+export function transferClientObjectToServer(el: ClientElement): Element {
   return {
-    id: clientPath.id,
-    type: clientPath.type,
+    id: el.id,
+    type: el.type,
     properties: {
-      ...clientPath.properties,
-      matrix: clientPath.properties.matrix.value,
-      path: clientPath.properties.path.toSVGString(),
+      ...el.properties,
+      matrix: el.properties.matrix.value,
+      path: el.properties.path.toSVGString(),
     },
   };
 }
@@ -105,8 +107,11 @@ export const useDocumentStore = create<State & Actions & RectActions>(
       const path = get().elements.find((el) => el.id === id);
       if (!path || path.type !== ElementType.Rect) return;
 
-      const newPath = Skia.Path.Make();
-      const r = newPath.addRect(
+      if (newWidth < 50) {
+        newWidth = 50;
+      }
+
+      const r = Skia.Path.Make().addRect(
         rect(
           shiftX ?? path.properties.x,
           path.properties.y,
@@ -124,7 +129,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
                 ...el.properties,
                 path: r,
                 x: shiftX ?? path.properties.x,
-                focalX: newWidth / 2,
+                focalX: path.properties.x + newWidth / 2,
                 width: newWidth,
               },
             };
@@ -138,8 +143,11 @@ export const useDocumentStore = create<State & Actions & RectActions>(
       const path = get().elements.find((el) => el.id === id);
       if (!path || path.type !== ElementType.Rect) return;
 
-      const newPath = Skia.Path.Make();
-      const r = newPath.addRect(
+      if (newHeight < 50) {
+        newHeight = 50;
+      }
+
+      const r = Skia.Path.Make().addRect(
         rect(
           path.properties.x,
           shiftY ?? path.properties.y,
@@ -157,7 +165,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
                 ...el.properties,
                 path: r,
                 y: shiftY ?? path.properties.y,
-                focalY: newHeight / 2,
+                focalY: path.properties.y + newHeight / 2,
                 height: newHeight,
               },
             };
@@ -183,7 +191,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
         set(({ elements }) => ({
           elements: elements.map((el) =>
             el.id === (serverState as PathElement).id
-              ? transformServerPathToClient({
+              ? transformServerObjectToClient({
                   ...el,
                   properties: (serverState as PathElement).properties,
                 })
@@ -196,7 +204,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
         elements: state.elements.concat(
           [serverState as DocumentStateUpdate]
             .flat()
-            .map((el) => transformServerPathToClient(el))
+            .map((el) => transformServerObjectToClient(el))
             .filter(Boolean) as ClientElement[]
         ),
       }));
@@ -204,6 +212,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
 
     addElement: (elementData, type) => {
       const newElement: ClientElement = {
+        // id: Math.random().toString(36).substring(2, 15), // Temporary ID generation, replace with a proper UUID generator
         id: crypto.randomUUID(),
         type: type ?? ElementType.Path,
         properties: elementData,
@@ -239,6 +248,13 @@ export const useDocumentStore = create<State & Actions & RectActions>(
         return { elements: [...state.elements] };
       });
       return updatedElement;
+    },
+    flushState: () => {
+      set({
+        elements: [],
+        drawingMode: "draw",
+        canvasMatrix: makeMutable(Matrix4()),
+      });
     },
   })
 );

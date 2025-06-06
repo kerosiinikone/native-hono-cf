@@ -63,6 +63,7 @@ routes.post(
   }
 );
 
+// Main entry for business logic
 routes.get("/ws/:id", (c) => {
   const documentId = c.req.param("id");
 

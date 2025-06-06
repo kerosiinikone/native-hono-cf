@@ -1,7 +1,7 @@
 import { useWebSocket } from "@/hooks/useWebSocket";
 import {
   ClientElement,
-  transferClientPathToServer,
+  transferClientObjectToServer,
   useDocumentStore,
 } from "@/state/store";
 import {
@@ -14,22 +14,26 @@ import { useCallback } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
-import Toolbar from "../ui/Toolbar";
+import Toolbar from "../ui/CanvasToolbar";
 import SkiaCn from "./SkiaCn";
 
-export default function CanvasScreen() {
+export default function CanvasScreen({
+  switchView,
+}: {
+  switchView: () => void;
+}) {
   const { documentId, setLocalFromServerState } = useDocumentStore(
     (state) => state
   );
 
   const handleStateReceive = useCallback(setLocalFromServerState, [documentId]);
 
+  // Move these higher up?
   const { bufferMessage } = useWebSocket({
     documentId: documentId,
     onStateReceived: handleStateReceive,
   });
 
-  // Does this need to be here?
   const sendLocalState = useCallback(
     <T extends ClientElement>(type: StateMessageCommands, payload: T) => {
       if (!documentId) return;
@@ -38,7 +42,7 @@ export default function CanvasScreen() {
         command: type,
         payload:
           type !== MessageCommand.DELETE
-            ? transferClientPathToServer(payload)
+            ? transferClientObjectToServer(payload)
             : { elementIds: [payload.id] },
       } as WSMessage);
     },
@@ -48,7 +52,7 @@ export default function CanvasScreen() {
   return (
     <GestureHandlerRootView style={gStyles.container}>
       <SkiaCn sendLocalState={sendLocalState} />
-      <CanvasPointerMode />
+      <CanvasPointerMode switchView={switchView} />
       <Toolbar sendLocalState={sendLocalState} />
     </GestureHandlerRootView>
   );

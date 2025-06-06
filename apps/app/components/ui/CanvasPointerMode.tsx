@@ -1,11 +1,20 @@
 import { useDocumentStore } from "@/state/store";
+import { useCallback } from "react";
 import { Button, StyleSheet, View } from "react-native";
 
-export function CanvasPointerMode() {
-  const { setDrawingMode, drawingMode } = useDocumentStore((state) => state);
+export function CanvasPointerMode({ switchView }: { switchView: () => void }) {
+  const { setDrawingMode, drawingMode, flushState } = useDocumentStore(
+    (state) => state
+  );
+
+  const handleSwitchView = useCallback(() => {
+    flushState();
+    switchView();
+  }, [flushState, switchView]);
 
   return (
     <View style={styles.container}>
+      <Button title="Document" onPress={handleSwitchView} />
       <Button
         title="Draw"
         onPress={() => setDrawingMode("draw")}

@@ -21,6 +21,9 @@ interface DrawingGestureProps {
   ) => void;
 }
 
+const MIN_DIMENSION_SIZE = 50;
+const DIMENSION_ADJUSTMENT = 20;
+
 function generateNewPath(
   currentPath: SharedValue<SkPath>,
   currentPathDimensions: SharedValue<{
@@ -32,61 +35,46 @@ function generateNewPath(
   matrix: SharedValue<Matrix4>,
   canvasMatrix: SharedValue<Matrix4>
 ): ClientObject {
-  let width = Math.abs(
-    currentPathDimensions.value.xup - currentPathDimensions.value.xdown
-  );
-  let height = Math.abs(
-    currentPathDimensions.value.yup - currentPathDimensions.value.ydown
-  );
+  "worklet";
+  const pathDimensions = currentPathDimensions.value;
 
-  if (width < 50) {
-    currentPathDimensions.value.xup += 20;
-    currentPathDimensions.value.xdown -= 20;
+  let width = Math.abs(pathDimensions.xup - pathDimensions.xdown);
+  let height = Math.abs(pathDimensions.yup - pathDimensions.ydown);
 
-    width = Math.abs(
-      currentPathDimensions.value.xup - currentPathDimensions.value.xdown
-    );
+  if (width < MIN_DIMENSION_SIZE) {
+    pathDimensions.xup += DIMENSION_ADJUSTMENT;
+    pathDimensions.xdown -= DIMENSION_ADJUSTMENT;
+    width = Math.abs(pathDimensions.xup - pathDimensions.xdown);
   }
 
-  if (height < 50) {
-    currentPathDimensions.value.yup += 20;
-    currentPathDimensions.value.ydown -= 20;
-
-    height = Math.abs(
-      currentPathDimensions.value.yup - currentPathDimensions.value.ydown
-    );
+  if (height < MIN_DIMENSION_SIZE) {
+    pathDimensions.yup += DIMENSION_ADJUSTMENT;
+    pathDimensions.ydown -= DIMENSION_ADJUSTMENT;
+    height = Math.abs(pathDimensions.yup - pathDimensions.ydown);
   }
+
+  const x = Math.min(pathDimensions.xup, pathDimensions.xdown);
+  const y = Math.min(pathDimensions.yup, pathDimensions.ydown);
+
+  const focalX = x + width / 2;
+  const focalY = y + height / 2;
+
+  const transformedMatrix = makeMutable(
+    multiply4(
+      matrix.value,
+      translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
+    )
+  );
 
   return {
     path: currentPath.value.copy(),
-    x: Math.min(
-      currentPathDimensions.value.xup,
-      currentPathDimensions.value.xdown
-    ),
-    y: Math.min(
-      currentPathDimensions.value.yup,
-      currentPathDimensions.value.ydown
-    ),
-    focalX:
-      Math.min(
-        currentPathDimensions.value.xup,
-        currentPathDimensions.value.xdown
-      ) +
-      width / 2,
-    focalY:
-      Math.min(
-        currentPathDimensions.value.yup,
-        currentPathDimensions.value.ydown
-      ) +
-      height / 2,
+    x,
+    y,
+    focalX,
+    focalY,
     width,
     height,
-    matrix: makeMutable(
-      multiply4(
-        matrix.value,
-        translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
-      )
-    ),
+    matrix: transformedMatrix,
     stretchable: false,
   };
 }
@@ -156,7 +144,6 @@ export default function useDrawingGesture({
       );
 
       sendLocalState(MessageCommand.ADD, addElement(newPath));
-
       resetCanvasVariables();
     });
 

@@ -4,7 +4,7 @@ import { multiply4, translate } from "react-native-redash";
 
 export default function useCanvasPanGesture(): PanGesture {
   const { canvasMatrix } = useDocumentStore((state) => state);
-  const canvasPanGesture = Gesture.Pan()
+  return Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
     .onChange((e) => {
@@ -14,5 +14,4 @@ export default function useCanvasPanGesture(): PanGesture {
         canvasMatrix.value
       );
     });
-  return canvasPanGesture;
 }

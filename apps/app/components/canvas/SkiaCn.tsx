@@ -15,6 +15,9 @@ interface SkiaCnProps {
   ) => void;
 }
 
+// When this component is destroyed, all the drawn paths should
+// be removed from the client store !!!
+
 export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
   const { canvasMatrix, drawingMode, elements, updateElementMatrix } =
     useDocumentStore((state) => state);
