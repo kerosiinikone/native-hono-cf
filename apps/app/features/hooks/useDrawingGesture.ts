@@ -1,4 +1,8 @@
-import { ClientElement, ClientObject, useDocumentStore } from "@/state/store";
+import {
+  ClientElement,
+  ClientObject,
+  withSkia_useCanvasStore,
+} from "@/state/with-skia";
 import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import {
   Matrix4,
@@ -85,7 +89,9 @@ export default function useDrawingGesture({
   drawingGesture: PanGesture;
   currentPath: SharedValue<SkPath>;
 } {
-  const { canvasMatrix, addElement } = useDocumentStore((state) => state);
+  const { canvasMatrix, addElement } = withSkia_useCanvasStore(
+    (state) => state
+  );
 
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);

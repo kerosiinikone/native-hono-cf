@@ -12,6 +12,7 @@ export default function DocumentCanvasScreen() {
   return (
     <View style={{ flex: 1 }}>
       {screenView == 0 ? (
+        // For web, use WithSkiaWeb to load the CanvasScreen component
         <WithSkiaWeb
           getComponent={() => require("@/components/canvas/CanvasScreen")}
           componentProps={{

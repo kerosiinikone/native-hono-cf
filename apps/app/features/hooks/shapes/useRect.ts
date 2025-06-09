@@ -1,4 +1,4 @@
-import { ClientObject, useDocumentStore } from "@/state/store";
+import { ClientObject, withSkia_useCanvasStore } from "@/state/with-skia";
 import { copyMatrix } from "@/utils/matrix";
 import { Matrix4, rect, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
@@ -6,7 +6,7 @@ import { makeMutable, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 export default function useRect() {
-  const { canvasMatrix } = useDocumentStore((state) => state);
+  const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
   const { width, height } = useWindowDimensions();
   const matrix = useSharedValue(Matrix4());
 

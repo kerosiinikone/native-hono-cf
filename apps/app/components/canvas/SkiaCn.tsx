@@ -1,12 +1,13 @@
 import useCanvasPanGesture from "@/features/hooks/useCanvasPanGesture";
 import useDrawingGesture from "@/features/hooks/useDrawingGesture";
-import { ClientElement, useDocumentStore } from "@/state/store";
+import { useDocumentStore } from "@/state/document";
 import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
 import { Canvas, Group, Matrix4, Path } from "@shopify/react-native-skia";
 import { StyleSheet } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useDerivedValue } from "react-native-reanimated";
 import SelectPath from "./SelectPath";
+import { ClientElement, withSkia_useCanvasStore } from "@/state/with-skia";
 
 interface SkiaCnProps {
   sendLocalState: <T extends ClientElement>(
@@ -19,8 +20,9 @@ interface SkiaCnProps {
 // be removed from the client store !!!
 
 export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
-  const { canvasMatrix, drawingMode, elements, updateElementMatrix } =
-    useDocumentStore((state) => state);
+  const drawingMode = useDocumentStore((state) => state.drawingMode);
+  const { canvasMatrix, elements, updateElementMatrix } =
+    withSkia_useCanvasStore((state) => state);
 
   const { drawingGesture, currentPath } = useDrawingGesture({ sendLocalState });
   const canvasPanGesture = useCanvasPanGesture();

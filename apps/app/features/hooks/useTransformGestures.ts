@@ -1,8 +1,8 @@
-import { useDocumentStore } from "@/state/store";
+import { withSkia_useCanvasStore } from "@/state/with-skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";
-import { runOnJS, SharedValue, useSharedValue } from "react-native-reanimated";
+import { SharedValue, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 enum DragDirection {
@@ -52,7 +52,9 @@ export default function useTransformGestures({
   stretchable,
   focalY,
 }: TransformGesturesProps): SimultaneousGesture {
-  const { editRectWidth, editRectHeight } = useDocumentStore((state) => state);
+  const { editRectWidth, editRectHeight } = withSkia_useCanvasStore(
+    (state) => state
+  );
 
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });

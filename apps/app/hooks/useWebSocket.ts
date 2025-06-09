@@ -13,11 +13,7 @@ const BUFFER_INTERVAL = 250;
 interface UseWebSocketOptions {
   documentId: string | null;
   onStateReceived: (
-    state:
-      | DocumentStateUpdate
-      | {
-          elementIds: string[];
-        },
+    state: DocumentStateUpdate,
     command: MessageCommand
   ) => void;
   onError?: (error: Event) => void;
@@ -85,7 +81,7 @@ export function useWebSocket({
 
         if (data.type === MessageType.STATE && data.payload) {
           // Relay for now
-          onStateReceived(data.payload, data.command);
+          onStateReceived(data.payload as DocumentStateUpdate, data.command);
         }
       } catch (e) {
         console.warn("Error processing WebSocket message:", e);
@@ -113,6 +109,7 @@ export function useWebSocket({
         ws.readyState === WebSocket.OPEN ||
         ws.readyState === WebSocket.CONNECTING
       ) {
+        console.log("Closing WebSocket connection");
         ws.close();
       }
       if (sendBufferIntervalRef.current) {

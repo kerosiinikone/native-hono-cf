@@ -34,9 +34,18 @@ export interface DocumentState {
   elements: Element[];
 }
 
+export interface TextDocumentState {
+  headingExtension?: string;
+  textExtension?: string;
+}
+
 export type DocumentStateUpdate =
   | Readonly<Element>
-  | ReadonlyArray<Readonly<Element>>;
+  | ReadonlyArray<Readonly<Element>>
+  | ReadonlyArray<{
+      elementIds: string[];
+    }>
+  | Readonly<TextDocumentState>;
 
 export interface BaseElementProperties {
   x: number;

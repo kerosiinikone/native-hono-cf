@@ -1,14 +1,26 @@
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { useDocumentStore } from "@/state/document";
+import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
+import {
+  MessageCommand,
+  MessageType,
+  StateMessageCommands,
+  WSMessage,
+} from "@native-hono-cf/shared";
 
 const HEADING_FONT_SIZE = 40;
 const BODY_FONT_SIZE = 20;
 
-// When the "heading" input filed is deselected, it should be replaced with a bold
-// text element that has the same text as the input field.
-
-// Remove input field styling -> border, etc
-function DocumentHeadingArea() {
+// DocumentHeadingArea now receives value and onChangeText as props
+function DocumentHeadingArea({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
   return (
     <TextInput
       autoFocus={true}
@@ -25,11 +37,20 @@ function DocumentHeadingArea() {
         padding: 10,
         outline: "none",
       }}
+      value={value}
+      onChangeText={onChangeText}
     />
   );
 }
 
-function DocumentBodyArea() {
+// DocumentBodyArea now receives value and onChangeText as props
+function DocumentBodyArea({
+  value,
+  onChangeText,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
   const { height } = useWindowDimensions();
   return (
     <TextInput
@@ -46,6 +67,8 @@ function DocumentBodyArea() {
         padding: 10,
         outline: "none",
       }}
+      value={value}
+      onChangeText={onChangeText}
     />
   );
 }
@@ -55,10 +78,66 @@ export default function DocumentScreen({
 }: {
   switchView: () => void;
 }) {
+  const {
+    documentId,
+    flushState,
+    textContent,
+    textHeading,
+    setTextContent,
+    setTextHeading,
+  } = useDocumentStore((state) => state);
+
+  // Move these higher up -> reuse the same socket for both text and canvas
+  const { bufferMessage } = useWebSocket({
+    documentId: documentId,
+    onStateReceived: (_) => {
+      // Unimplemented
+    },
+  });
+
+  const sendLocalState = useCallback(
+    <
+      T extends {
+        [key: string]: any; // For now
+      }
+    >(
+      type: StateMessageCommands,
+      payload: T
+    ) => {
+      if (!documentId) return;
+      bufferMessage({
+        type: MessageType.STATE,
+        command: type, // Upddate or Add in the case of text
+        payload,
+      } as WSMessage);
+    },
+    [documentId, bufferMessage]
+  );
+
+  const setTextHeadingWithUpdate = (text: string) => {
+    // sendLocalState() -> how do I distinguish between editing and adding new text?
+    setTextHeading(text);
+  };
+
+  const setTextBodyWithUpdate = (text: string) => {
+    setTextContent(text);
+  };
+
+  // If new WS messages are changes in elements, disregard them here
+
+  useEffect(() => {
+    return () => {
+      flushState();
+    };
+  }, [documentId]);
+
   return (
     <View style={styles.container}>
       <DocumentToolbar switchView={switchView} />
-      <DocumentHeadingArea />
+      <DocumentHeadingArea
+        value={textHeading}
+        onChangeText={setTextHeadingWithUpdate}
+      />
       <View
         style={{
           marginTop: 10,
@@ -67,7 +146,10 @@ export default function DocumentScreen({
           borderBottomWidth: StyleSheet.hairlineWidth,
         }}
       />
-      <DocumentBodyArea />
+      <DocumentBodyArea
+        value={textContent}
+        onChangeText={setTextBodyWithUpdate}
+      />
     </View>
   );
 }

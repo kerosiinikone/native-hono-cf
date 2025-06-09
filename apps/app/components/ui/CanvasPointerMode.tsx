@@ -1,4 +1,4 @@
-import { useDocumentStore } from "@/state/store";
+import { useDocumentStore } from "@/state/document";
 import { useCallback } from "react";
 import { Button, StyleSheet, View } from "react-native";
 

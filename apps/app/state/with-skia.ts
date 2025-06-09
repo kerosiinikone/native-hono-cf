@@ -10,9 +10,6 @@ import { Matrix4, rect, Skia, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 
-// TODO: Helpers and more elegent logic
-// TODO: Immer
-
 export type ClientObject = {
   path: SkPath;
   x: number;
@@ -32,15 +29,11 @@ export interface ClientElement {
 }
 
 type State = {
-  documentId: string | null;
   elements: ClientElement[];
-  drawingMode: DrawingMode;
   canvasMatrix: SharedValue<Matrix4>;
 };
 
 type Actions = {
-  setDocumentId: (id: string | null) => void;
-  setDrawingMode: (mode: DrawingMode) => void;
   flushState: () => void;
   setLocalFromServerState: (
     serverState:
@@ -63,8 +56,6 @@ type RectActions = {
   editRectHeight: (id: string, newHeight: number, shiftY?: number) => void;
 };
 
-// Make it clearer which element is being handled with types (PathElementProperties, RectPathElementProperties, etc.)
-
 function transformServerObjectToClient(el: Element): ClientElement | null {
   if (!el.properties.path) return null;
   const skPath = Skia.Path.MakeFromSVGString(el.properties.path);
@@ -80,7 +71,7 @@ function transformServerObjectToClient(el: Element): ClientElement | null {
   };
 }
 
-export function transferClientObjectToServer(el: ClientElement): Element {
+export function transformClientObjectToServer(el: ClientElement): Element {
   return {
     id: el.id,
     type: el.type,
@@ -92,15 +83,12 @@ export function transferClientObjectToServer(el: ClientElement): Element {
   };
 }
 
-export const useDocumentStore = create<State & Actions & RectActions>(
+export const withSkia_useCanvasStore = create<State & Actions & RectActions>(
   (set, get) => ({
     documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
     elements: [],
     drawingMode: "draw",
     canvasMatrix: makeMutable(Matrix4()),
-
-    setDocumentId: (id) => set({ documentId: id }),
-    setDrawingMode: (mode) => set({ drawingMode: mode }),
 
     // Optimize
     editRectWidth: (id, newWidth, shiftX) => {
@@ -204,6 +192,7 @@ export const useDocumentStore = create<State & Actions & RectActions>(
         elements: state.elements.concat(
           [serverState as DocumentStateUpdate]
             .flat()
+            .filter((el): el is Element => !!el && typeof el === "object")
             .map((el) => transformServerObjectToClient(el))
             .filter(Boolean) as ClientElement[]
         ),
@@ -252,7 +241,6 @@ export const useDocumentStore = create<State & Actions & RectActions>(
     flushState: () => {
       set({
         elements: [],
-        drawingMode: "draw",
         canvasMatrix: makeMutable(Matrix4()),
       });
     },

@@ -1,6 +1,6 @@
 import useCircle from "@/features/hooks/shapes/useCircle";
 import useRect from "@/features/hooks/shapes/useRect";
-import { ClientElement, withSkia_useCanvasStore } from "@/state/with-skia";
+import { ClientElement, useDocumentStore } from "@/state/document";
 import {
   ElementType,
   MessageCommand,
@@ -16,7 +16,7 @@ interface ToolbarProps {
 }
 
 export default function Toolbar({ sendLocalState }: ToolbarProps) {
-  const { removeElement, elements, addElement } = withSkia_useCanvasStore(
+  const { removeElement, elements, addElement } = useDocumentStore(
     (state) => state
   );
 

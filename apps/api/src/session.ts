@@ -103,7 +103,7 @@ export class DocumentSession {
             JSON.stringify({
               type: MessageType.STATE,
               command: MessageCommand.ADD,
-              payload: this.state.elements,
+              payload: this.state.elements, // This has to also send the text document state
             } as WSMessage)
           );
           break;

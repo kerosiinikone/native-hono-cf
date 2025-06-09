@@ -1,9 +1,9 @@
-import { useDocumentStore } from "@/state/store";
+import { withSkia_useCanvasStore } from "@/state/with-skia";
 import { Gesture, PanGesture } from "react-native-gesture-handler";
 import { multiply4, translate } from "react-native-redash";
 
 export default function useCanvasPanGesture(): PanGesture {
-  const { canvasMatrix } = useDocumentStore((state) => state);
+  const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
   return Gesture.Pan()
     .averageTouches(true)
     .maxPointers(1)
