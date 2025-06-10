@@ -17,7 +17,10 @@ const DEBOUNCE = 5000;
 
 export class DocumentSession {
   private clientMap: Map<WebSocket, string> = new Map();
-  public state: DocumentState = { elements: [] };
+  public state: DocumentState = {
+    elements: [],
+    textDocumentState: {},
+  };
   private durableObjectStorage: DocumentStorage;
   private d1Persistence?: D1Persistence;
 
@@ -103,9 +106,13 @@ export class DocumentSession {
             JSON.stringify({
               type: MessageType.STATE,
               command: MessageCommand.ADD,
-              payload: this.state.elements, // This has to also send the text document state
+              payload: {
+                content: "canvas", // or "text"
+                state: this.state.elements,
+              }, // This has to also send the text document state
             } as WSMessage)
           );
+          // Also send back the text document state if it exists
           break;
         case MessageType.STATE:
           const stateUpdate = wsMessageValidation.data as
@@ -123,14 +130,17 @@ export class DocumentSession {
             case MessageCommand.DELETE:
               const stateDelete =
                 wsMessageValidation.data as StateDeleteMessage;
-              stateDelete.payload.elementIds.forEach((did) => {
+              (
+                stateDelete.payload?.state as { elementIds: string[] }
+              ).elementIds.forEach((did) => {
                 this.state.elements = this.state.elements.filter(
                   (element) => element.id !== did
                 );
               });
               break;
             case MessageCommand.UPDATE:
-              const updatePayload = stateUpdate.payload as Element;
+              const updatePayload = (stateUpdate as StateUpdateMessage).payload
+                .state as Element;
               const elementIdToUpdate = updatePayload.id;
 
               if (
@@ -164,9 +174,9 @@ export class DocumentSession {
               }
               break;
             case MessageCommand.ADD:
-              const addPayload = stateUpdate.payload as Element[];
+              const { state } = (stateUpdate as StateUpdateMessage).payload;
               this.state.elements = this.state.elements.concat(
-                [addPayload].flat()
+                [state as Element | Element[]].flat()
               );
               break;
             default:

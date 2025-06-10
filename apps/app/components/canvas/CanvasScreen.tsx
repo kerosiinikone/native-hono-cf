@@ -1,5 +1,9 @@
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useDocumentStore } from "@/state/document";
+import {
+  ClientElement,
+  transformClientObjectToServer,
+  withSkia_useCanvasStore,
+} from "@/state/with-skia";
 import {
   DocumentStateUpdate,
   MessageCommand,
@@ -13,62 +17,65 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
 import Toolbar from "../ui/CanvasToolbar";
 import SkiaCn from "./SkiaCn";
-import {
-  ClientElement,
-  transformClientObjectToServer,
-  withSkia_useCanvasStore,
-} from "@/state/with-skia";
+
+interface CanvasScreenProps {
+  switchView: () => void;
+  bufferMessage: (message: WSMessage) => void;
+}
 
 export default function CanvasScreen({
   switchView,
-}: {
-  switchView: () => void;
-}) {
-  const { documentId, flushState: flushDocument } = useDocumentStore(
-    (state) => state
-  );
-  const { setLocalFromServerState, flushState } = withSkia_useCanvasStore(
-    (state) => state
-  );
+  bufferMessage,
+}: CanvasScreenProps) {
+  const { documentId, globalMessageQueue, popMessageFromQueue } =
+    useDocumentStore((state) => state);
+  const { setLocalFromServerState } = withSkia_useCanvasStore((state) => state);
 
   const handleStateReceive = useCallback(
-    (serverState: DocumentStateUpdate, command: MessageCommand) => {
-      // CHECK IF THE STATE UPDATE CONCERNS ELEMENTS, NOT THE TEXT DOCUMENT!
-
-      setLocalFromServerState(serverState, command);
+    (msg: WSMessage) => {
+      const { command, payload } = msg as WSMessage;
+      setLocalFromServerState(payload as DocumentStateUpdate, command);
+      popMessageFromQueue();
     },
     [documentId]
   );
 
-  // Move these higher up -> reuse the same socket for both text and canvas
-  const { bufferMessage } = useWebSocket({
-    documentId: documentId,
-    onStateReceived: handleStateReceive,
-  });
-
+  // Sent here -> { content: "canvas" }
   const sendLocalState = useCallback(
     <T extends ClientElement>(type: StateMessageCommands, payload: T) => {
       if (!documentId) return;
       bufferMessage({
         type: MessageType.STATE,
         command: type,
-        payload:
-          type !== MessageCommand.DELETE
-            ? transformClientObjectToServer(payload)
-            : { elementIds: [payload.id] },
+        payload: {
+          content: "canvas",
+          state:
+            type !== MessageCommand.DELETE
+              ? transformClientObjectToServer(payload)
+              : { elementIds: [payload.id] },
+        },
       } as WSMessage);
     },
     [documentId, bufferMessage]
   );
 
   useEffect(() => {
-    return () => {
-      // This ensures that the canvas is cleared when switching views or navigating away
-      // if I decide ti want to re-establish the socket each time -> ???
-      flushState();
-      flushDocument();
-    };
-  }, [documentId]);
+    // const _: Set<string> = new Set();
+    console.log(globalMessageQueue);
+    //
+    // Loop all the messages in the queue
+    // If the message is of content "canvas", handle it
+    // BUT, only handle the last UPDATE / ADD for each element ID
+    // -> loop from the end of the queue and keep track of the IDs
+    //
+    // NAIVE IMPLEMENTATION
+    for (let i = globalMessageQueue.length - 1; i >= 0; i--) {
+      const message = globalMessageQueue[i];
+      if (!message || !message.payload) continue;
+      if ((message.payload as DocumentStateUpdate).content !== "canvas") return;
+      handleStateReceive(message);
+    }
+  }, [globalMessageQueue, popMessageFromQueue, handleStateReceive]);
 
   return (
     <GestureHandlerRootView style={gStyles.container}>

@@ -32,20 +32,24 @@ export type StateMessageCommands =
 
 export interface DocumentState {
   elements: Element[];
+  textDocumentState?: TextDocumentState;
 }
 
 export interface TextDocumentState {
-  headingExtension?: string;
-  textExtension?: string;
+  heading?: string;
+  text?: string;
 }
 
-export type DocumentStateUpdate =
-  | Readonly<Element>
-  | ReadonlyArray<Readonly<Element>>
-  | ReadonlyArray<{
-      elementIds: string[];
-    }>
-  | Readonly<TextDocumentState>;
+export type DocumentStateUpdate = {
+  content: "text" | "canvas";
+  state:
+    | Readonly<Element>
+    | ReadonlyArray<Readonly<Element>>
+    | ReadonlyArray<{
+        elementIds: string[];
+      }>
+    | Readonly<TextDocumentState>;
+};
 
 export interface BaseElementProperties {
   x: number;
@@ -93,9 +97,7 @@ export interface RectElement extends Element {
 export interface SetupMessage {
   type: MessageType.SETUP;
   command: MessageCommand.INFO;
-  payload: {
-    clientId?: string;
-  };
+  payload: null;
 }
 
 export interface StateUpdateMessage {
@@ -107,7 +109,7 @@ export interface StateUpdateMessage {
 export interface StateDeleteMessage {
   type: MessageType.STATE;
   command: MessageCommand.DELETE;
-  payload: { elementIds: string[] };
+  payload: DocumentStateUpdate;
 }
 
 export interface ErrorMessage {

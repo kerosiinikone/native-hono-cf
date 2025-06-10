@@ -4,11 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
 import {
+  DocumentStateUpdate,
   MessageCommand,
   MessageType,
   StateMessageCommands,
   WSMessage,
 } from "@native-hono-cf/shared";
+
+interface DocumentScreenProps {
+  switchView: () => void;
+  bufferMessage: (message: WSMessage) => void;
+}
 
 const HEADING_FONT_SIZE = 40;
 const BODY_FONT_SIZE = 20;
@@ -75,25 +81,27 @@ function DocumentBodyArea({
 
 export default function DocumentScreen({
   switchView,
-}: {
-  switchView: () => void;
-}) {
+  bufferMessage,
+}: DocumentScreenProps) {
   const {
     documentId,
-    flushState,
     textContent,
     textHeading,
     setTextContent,
     setTextHeading,
+    globalMessageQueue,
+    popMessageFromQueue,
   } = useDocumentStore((state) => state);
 
-  // Move these higher up -> reuse the same socket for both text and canvas
-  const { bufferMessage } = useWebSocket({
-    documentId: documentId,
-    onStateReceived: (_) => {
-      // Unimplemented
+  const handleStateReceive = useCallback(
+    (msg: WSMessage) => {
+      const { command, payload } = msg as WSMessage;
+      popMessageFromQueue();
+
+      // setLocalFromServerState(serverState, command);
     },
-  });
+    [documentId]
+  );
 
   const sendLocalState = useCallback(
     <
@@ -105,10 +113,14 @@ export default function DocumentScreen({
       payload: T
     ) => {
       if (!documentId) return;
+
       bufferMessage({
         type: MessageType.STATE,
         command: type, // Upddate or Add in the case of text
-        payload,
+        payload: {
+          content: "text", // This is a text document
+          state: payload,
+        },
       } as WSMessage);
     },
     [documentId, bufferMessage]
@@ -123,13 +135,14 @@ export default function DocumentScreen({
     setTextContent(text);
   };
 
-  // If new WS messages are changes in elements, disregard them here
-
   useEffect(() => {
-    return () => {
-      flushState();
-    };
-  }, [documentId]);
+    for (let i = globalMessageQueue.length - 1; i >= 0; i--) {
+      const message = globalMessageQueue[i];
+      if (!message || !message.payload) continue;
+      if ((message.payload as DocumentStateUpdate).content !== "text") return;
+      handleStateReceive(message);
+    }
+  }, [globalMessageQueue, popMessageFromQueue, handleStateReceive]);
 
   return (
     <View style={styles.container}>

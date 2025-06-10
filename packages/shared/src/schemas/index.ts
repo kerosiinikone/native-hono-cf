@@ -16,15 +16,20 @@ export const webSocketMessageSchema = z.object({
   type: z.enum(["setup", "state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
   payload: z
-    .union([
-      z.object({
-        message: z.string(),
-      }),
-      z.union([z.array(documentStateSchema), documentStateSchema]),
-      z.object({
-        elementIds: z.array(z.string()),
-      }),
-    ])
+    .object({
+      content: z.enum(["text", "canvas"]),
+      state: z
+        .union([
+          z.object({
+            message: z.string(),
+          }),
+          z.union([z.array(documentStateSchema), documentStateSchema]),
+          z.object({
+            elementIds: z.array(z.string()),
+          }),
+        ])
+        .optional(),
+    })
     .optional(),
 });
 

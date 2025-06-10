@@ -36,11 +36,7 @@ type State = {
 type Actions = {
   flushState: () => void;
   setLocalFromServerState: (
-    serverState:
-      | DocumentStateUpdate
-      | {
-          elementIds: string[];
-        },
+    serverState: DocumentStateUpdate,
     command: MessageCommand
   ) => void;
   addElement: (elementData: ClientObject, type?: ElementType) => ClientElement;
@@ -164,36 +160,33 @@ export const withSkia_useCanvasStore = create<State & Actions & RectActions>(
     },
 
     setLocalFromServerState: (serverState, cmd) => {
+      const { state: payload } = serverState;
+
       if (cmd === MessageCommand.DELETE) {
-        const elementIds = (
-          serverState as {
-            elementIds: string[];
-          }
-        ).elementIds;
-        set((state) => ({
-          elements: state.elements.filter((el) => !elementIds.includes(el.id)),
+        return set((state) => ({
+          elements: state.elements.filter(
+            (el) =>
+              !(payload as { elementIds: string[] }).elementIds.includes(el.id)
+          ),
         }));
-        return;
       }
       if (cmd === MessageCommand.UPDATE) {
-        set(({ elements }) => ({
+        return set(({ elements }) => ({
           elements: elements.map((el) =>
-            el.id === (serverState as PathElement).id
+            el.id === (payload as PathElement).id
               ? transformServerObjectToClient({
                   ...el,
-                  properties: (serverState as PathElement).properties,
+                  properties: (payload as PathElement).properties,
                 })
               : el
           ) as ClientElement[],
         }));
-        return;
       }
-      set((state) => ({
+      return set((state) => ({
         elements: state.elements.concat(
-          [serverState as DocumentStateUpdate]
+          [payload as Element | Element[]]
             .flat()
-            .filter((el): el is Element => !!el && typeof el === "object")
-            .map((el) => transformServerObjectToClient(el))
+            .map((el) => transformServerObjectToClient(el as Element))
             .filter(Boolean) as ClientElement[]
         ),
       }));
