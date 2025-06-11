@@ -16,6 +16,7 @@ export enum MessageType {
   ERROR = "error",
   PING = "ping",
   PONG = "pong",
+  TEXT_STATE = "text_state",
 }
 
 export enum MessageCommand {
@@ -32,25 +33,29 @@ export type StateMessageCommands =
 
 export interface DocumentState {
   elements: Element[];
-  textDocumentState?: TextDocumentState;
 }
 
 export interface TextDocumentState {
-  heading?: string;
-  text?: string;
+  heading: string;
+  text: string;
 }
 
-export type DocumentStateUpdate = {
-  content: "text" | "canvas";
-  state:
-    | Readonly<Element>
-    | ReadonlyArray<Readonly<Element>>
-    | ReadonlyArray<{
-        elementIds: string[];
-      }>
-    | Readonly<TextDocumentState>;
-};
+export interface TextDocumentStateUpdate {
+  heading?: string;
+  headingOffset?: string;
+  headingEnd?: string;
 
+  text?: string;
+  textOffset?: string;
+  textEnd?: string;
+}
+
+export type DocumentStateUpdate =
+  | Readonly<Element>
+  | ReadonlyArray<Readonly<Element>>
+  | Readonly<{
+      elementIds: string[];
+    }>;
 export interface BaseElementProperties {
   x: number;
   y: number;
@@ -70,11 +75,6 @@ export interface RectPathElementProperties extends BaseElementProperties {
   path: string;
   stretchable: true;
 }
-
-// export interface CirclePathElementProperties extends BaseElementProperties {
-//   path: string;
-//   stretchable: false;
-// }
 
 export type Element = {
   id: string;
@@ -106,12 +106,6 @@ export interface StateUpdateMessage {
   payload: DocumentStateUpdate;
 }
 
-export interface StateDeleteMessage {
-  type: MessageType.STATE;
-  command: MessageCommand.DELETE;
-  payload: DocumentStateUpdate;
-}
-
 export interface ErrorMessage {
   type: MessageType.ERROR;
   command: MessageCommand.INFO;
@@ -120,8 +114,18 @@ export interface ErrorMessage {
   };
 }
 
+// Can also be sent at the start of a session to set the initial text state
+export interface TextPatchMessage {
+  type: MessageType.TEXT_STATE;
+  command: StateMessageCommands;
+  payload: {
+    state: TextDocumentStateUpdate;
+  };
+}
+
 export type WSMessage =
   | SetupMessage
   | StateUpdateMessage
-  | StateDeleteMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | TextPatchMessage;
+// | CursorUpdateMessage

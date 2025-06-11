@@ -1,8 +1,10 @@
-import { DocumentState } from "@native-hono-cf/shared";
+import { DocumentState, TextDocumentState } from "@native-hono-cf/shared";
+
+export type DocumentObjectModel = DocumentState & TextDocumentState;
 
 export interface DocumentStorage {
-  _getState(): Promise<DocumentState | null>;
-  _putState(state: DocumentState): Promise<void>;
+  _getState(): Promise<DocumentObjectModel | null>;
+  _putState(state: DocumentObjectModel): Promise<void>;
   _getId(): Promise<string | null>;
   _setId(id: string): Promise<void>;
 }
@@ -10,12 +12,12 @@ export interface DocumentStorage {
 export class DObjectStorage implements DocumentStorage {
   constructor(private storage: DurableObjectStorage) {}
 
-  async _getState(): Promise<DocumentState | null> {
+  async _getState(): Promise<DocumentObjectModel | null> {
     const savedState = (await this.storage.get("state")) as string | null;
-    return savedState ? (JSON.parse(savedState) as DocumentState) : null;
+    return savedState ? (JSON.parse(savedState) as DocumentObjectModel) : null;
   }
 
-  async _putState(state: DocumentState): Promise<void> {
+  async _putState(state: DocumentObjectModel): Promise<void> {
     await this.storage.put("state", JSON.stringify(state));
   }
 
@@ -31,7 +33,7 @@ export class DObjectStorage implements DocumentStorage {
 export class D1Persistence {
   constructor(private db: D1Database, private documentId: string) {}
 
-  async loadState(): Promise<DocumentState | null> {
+  async loadState(): Promise<DocumentObjectModel | null> {
     if (!this.documentId) {
       console.error("[D1Persistence] No document ID provided for loadState.");
       return null;
@@ -42,7 +44,9 @@ export class D1Persistence {
         .bind(this.documentId)
         .first<{ state: string }>();
 
-      return row && row.state ? (JSON.parse(row.state) as DocumentState) : null;
+      return row && row.state
+        ? (JSON.parse(row.state) as DocumentObjectModel)
+        : null;
     } catch (err) {
       console.error(
         `[D1Persistence] Error loading state for ${this.documentId}:`,
@@ -52,7 +56,7 @@ export class D1Persistence {
     }
   }
 
-  async persistState(state: DocumentState): Promise<void> {
+  async persistState(state: DocumentObjectModel): Promise<void> {
     if (!this.documentId) {
       console.error(
         "[D1Persistence] No document ID provided for persistState."

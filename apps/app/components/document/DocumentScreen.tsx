@@ -1,15 +1,12 @@
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useDocumentStore } from "@/state/document";
-import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
-import { DocumentToolbar } from "../ui/DocumentToolbar";
 import {
-  DocumentStateUpdate,
-  MessageCommand,
   MessageType,
   StateMessageCommands,
   WSMessage,
 } from "@native-hono-cf/shared";
+import { useCallback, useEffect, useState } from "react";
+import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import { DocumentToolbar } from "../ui/DocumentToolbar";
 
 interface DocumentScreenProps {
   switchView: () => void;
@@ -79,6 +76,26 @@ function DocumentBodyArea({
   );
 }
 
+// Logic for editing the text document
+//
+// SENDING
+//
+// User edits (adds, deletes, modifies) text or/and the heading
+// The start point of the text is recorded as the offset
+// The end point of the added/deleted text is recorded as the end
+// There is an enum that keeps track of the type of action
+// (add, delete, update)
+// Each time the input changes, the local state is updated and a message
+// is debounced with the gelp of a bufferMessage function (or similar)
+//
+// RECEIVING
+//
+// The server sends a message with the type of action and the payload
+// The payload contains the offset and end of the text
+// The local state is computed in the "store" and sent back as a whole
+// This becomes important when inputs are switched between interactable and
+// previews (for Markdown formatting after editing is "done")
+
 export default function DocumentScreen({
   switchView,
   bufferMessage,
@@ -89,16 +106,20 @@ export default function DocumentScreen({
     textHeading,
     setTextContent,
     setTextHeading,
-    globalMessageQueue,
+    globalTextMessageQueue,
     popMessageFromQueue,
   } = useDocumentStore((state) => state);
 
+  // When true -> TextInputs are active
+  // When false -> TextInputs are replaced with Text components (with Markdown formatting)
+  const [isEditingHeading, setIsEditingHeading] = useState<boolean>(false);
+  const [isEditingBody, setIsEditingBody] = useState<boolean>(false);
+
   const handleStateReceive = useCallback(
     (msg: WSMessage) => {
-      const { command, payload } = msg as WSMessage;
-      popMessageFromQueue();
-
+      // const { command, payload } = msg as WSMessage;
       // setLocalFromServerState(serverState, command);
+      popMessageFromQueue("text");
     },
     [documentId]
   );
@@ -109,19 +130,20 @@ export default function DocumentScreen({
         [key: string]: any; // For now
       }
     >(
-      type: StateMessageCommands,
-      payload: T
+      type: StateMessageCommands
     ) => {
       if (!documentId) return;
 
       bufferMessage({
-        type: MessageType.STATE,
-        command: type, // Upddate or Add in the case of text
+        type: MessageType.TEXT_STATE,
+        command: type,
         payload: {
-          content: "text", // This is a text document
-          state: payload,
+          state: {
+            heading: textHeading,
+            text: textContent,
+          },
         },
-      } as WSMessage);
+      });
     },
     [documentId, bufferMessage]
   );
@@ -136,13 +158,13 @@ export default function DocumentScreen({
   };
 
   useEffect(() => {
-    for (let i = globalMessageQueue.length - 1; i >= 0; i--) {
-      const message = globalMessageQueue[i];
+    for (let i = globalTextMessageQueue.length - 1; i >= 0; i--) {
+      const message = globalTextMessageQueue[i];
       if (!message || !message.payload) continue;
-      if ((message.payload as DocumentStateUpdate).content !== "text") return;
+      if (message.type !== MessageType.TEXT_STATE) continue;
       handleStateReceive(message);
     }
-  }, [globalMessageQueue, popMessageFromQueue, handleStateReceive]);
+  }, [globalTextMessageQueue, popMessageFromQueue, handleStateReceive]);
 
   return (
     <View style={styles.container}>

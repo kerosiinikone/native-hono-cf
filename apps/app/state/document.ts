@@ -1,4 +1,9 @@
-import { DrawingMode, WSMessage } from "@native-hono-cf/shared";
+import {
+  DocumentStateUpdate,
+  DrawingMode,
+  MessageType,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import { create } from "zustand";
 
 // TODO: Helpers and more elegent logic
@@ -8,7 +13,8 @@ type State = {
   documentId: string | null;
   drawingMode: DrawingMode;
 
-  globalMessageQueue: WSMessage[];
+  globalTextMessageQueue: WSMessage[];
+  globalCanvasMessageQueue: WSMessage[];
 
   textContent: string;
   textHeading: string;
@@ -18,11 +24,12 @@ type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
   pushMessageToQueue: (message: WSMessage) => void;
-  popMessageFromQueue: () => WSMessage | undefined;
+  popMessageFromQueue: (type: "text" | "canvas") => WSMessage | undefined;
 
   flushState: () => void;
 };
 
+// Split text actions to keep the store organized?
 type TextActions = {
   setTextContent: (content: string) => void;
   setTextHeading: (heading: string) => void;
@@ -34,24 +41,37 @@ export const useDocumentStore = create<State & Actions & TextActions>(
     drawingMode: "draw",
     textContent: "",
     textHeading: "",
-    globalMessageQueue: [],
+    globalTextMessageQueue: [],
+    globalCanvasMessageQueue: [],
 
-    pushMessageToQueue: (message) =>
-      set((state) => ({
-        globalMessageQueue: [...state.globalMessageQueue, message],
-      })),
-    popMessageFromQueue: () => {
-      if (get().globalMessageQueue.length === 0) return;
-      const message =
-        get().globalMessageQueue[get().globalMessageQueue.length - 1];
-      set((state) => ({
-        globalMessageQueue: state.globalMessageQueue.slice(0, -1),
-      }));
-      return message;
+    // Determine type here?
+    pushMessageToQueue: (message) => {
+      const { globalTextMessageQueue, globalCanvasMessageQueue } = get();
+      if (message.type === MessageType.TEXT_STATE) {
+        set({
+          globalTextMessageQueue: [...globalTextMessageQueue, message],
+        });
+      } else {
+        set({
+          globalCanvasMessageQueue: [...globalCanvasMessageQueue, message],
+        });
+      }
+    },
+    popMessageFromQueue: (type) => {
+      const { globalTextMessageQueue, globalCanvasMessageQueue } = get();
+      if (type === "text") {
+        if (globalTextMessageQueue.length > 0) {
+          return globalTextMessageQueue.pop();
+        }
+      } else {
+        if (globalCanvasMessageQueue.length > 0) {
+          return globalCanvasMessageQueue.pop();
+        }
+      }
     },
 
-    setTextContent: (content) => set({ textContent: content }),
-    setTextHeading: (heading) => set({ textHeading: heading }),
+    setTextContent: (content) => null,
+    setTextHeading: (heading) => null,
 
     setDocumentId: (id) => set({ documentId: id }),
     setDrawingMode: (mode) => set({ drawingMode: mode }),

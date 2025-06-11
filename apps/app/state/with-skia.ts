@@ -159,12 +159,10 @@ export const withSkia_useCanvasStore = create<State & Actions & RectActions>(
       }));
     },
 
-    setLocalFromServerState: (serverState, cmd) => {
-      const { state: payload } = serverState;
-
+    setLocalFromServerState: (payload, cmd) => {
       if (cmd === MessageCommand.DELETE) {
-        return set((state) => ({
-          elements: state.elements.filter(
+        return set(({ elements }) => ({
+          elements: elements.filter(
             (el) =>
               !(payload as { elementIds: string[] }).elementIds.includes(el.id)
           ),

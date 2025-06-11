@@ -27,55 +27,49 @@ export default function CanvasScreen({
   switchView,
   bufferMessage,
 }: CanvasScreenProps) {
-  const { documentId, globalMessageQueue, popMessageFromQueue } =
+  const { documentId, globalCanvasMessageQueue, popMessageFromQueue } =
     useDocumentStore((state) => state);
   const { setLocalFromServerState } = withSkia_useCanvasStore((state) => state);
 
+  // Leave and abstract this to the store to handle the state updates?
   const handleStateReceive = useCallback(
     (msg: WSMessage) => {
       const { command, payload } = msg as WSMessage;
       setLocalFromServerState(payload as DocumentStateUpdate, command);
-      popMessageFromQueue();
+      popMessageFromQueue("canvas"); // a separate funciotn to pop the message from the queue?
     },
     [documentId]
   );
 
-  // Sent here -> { content: "canvas" }
   const sendLocalState = useCallback(
     <T extends ClientElement>(type: StateMessageCommands, payload: T) => {
       if (!documentId) return;
       bufferMessage({
         type: MessageType.STATE,
         command: type,
-        payload: {
-          content: "canvas",
-          state:
-            type !== MessageCommand.DELETE
-              ? transformClientObjectToServer(payload)
-              : { elementIds: [payload.id] },
-        },
-      } as WSMessage);
+        payload:
+          type !== MessageCommand.DELETE
+            ? transformClientObjectToServer(payload)
+            : { elementIds: [payload.id] },
+      });
     },
     [documentId, bufferMessage]
   );
 
   useEffect(() => {
-    // const _: Set<string> = new Set();
-    console.log(globalMessageQueue);
-    //
     // Loop all the messages in the queue
     // If the message is of content "canvas", handle it
     // BUT, only handle the last UPDATE / ADD for each element ID
     // -> loop from the end of the queue and keep track of the IDs
     //
     // NAIVE IMPLEMENTATION
-    for (let i = globalMessageQueue.length - 1; i >= 0; i--) {
-      const message = globalMessageQueue[i];
+    for (let i = globalCanvasMessageQueue.length - 1; i >= 0; i--) {
+      const message = globalCanvasMessageQueue[i];
       if (!message || !message.payload) continue;
-      if ((message.payload as DocumentStateUpdate).content !== "canvas") return;
+      if (message.type === MessageType.TEXT_STATE) continue;
       handleStateReceive(message);
     }
-  }, [globalMessageQueue, popMessageFromQueue, handleStateReceive]);
+  }, [globalCanvasMessageQueue, popMessageFromQueue, handleStateReceive]);
 
   return (
     <GestureHandlerRootView style={gStyles.container}>

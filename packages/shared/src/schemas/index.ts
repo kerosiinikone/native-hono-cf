@@ -12,26 +12,43 @@ export const documentStateSchema = z.object({
   properties: z.record(z.any()),
 });
 
-export const webSocketMessageSchema = z.object({
+export const canvasWebSocketMessageSchema = z.object({
   type: z.enum(["setup", "state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
   payload: z
-    .object({
-      content: z.enum(["text", "canvas"]),
-      state: z
-        .union([
-          z.object({
-            message: z.string(),
-          }),
-          z.union([z.array(documentStateSchema), documentStateSchema]),
-          z.object({
-            elementIds: z.array(z.string()),
-          }),
-        ])
-        .optional(),
-    })
+    .union([
+      z.object({
+        message: z.string(),
+      }),
+      z.union([z.array(documentStateSchema), documentStateSchema]),
+      z.object({
+        elementIds: z.array(z.string()),
+      }),
+    ])
     .optional(),
 });
+
+export const textWebSocketMessageSchema = z.object({
+  type: z.enum(["text_state", "error"]),
+  command: z.enum(["update", "delete", "add", "info"]),
+  payload: z.object({
+    offset: z.string(),
+    end: z.string(),
+    state: z.object({
+      heading: z.string().optional(),
+      headingOffset: z.string().optional(),
+      headingEnd: z.string().optional(),
+      text: z.string().optional(),
+      textOffset: z.string().optional(),
+      textEnd: z.string().optional(),
+    }),
+  }),
+});
+
+export const webSocketMessageSchema = z.union([
+  canvasWebSocketMessageSchema,
+  textWebSocketMessageSchema,
+]);
 
 export type DocumentSchema = z.infer<typeof documentSchema>;
 export type DocumentStateSchema = z.infer<typeof documentStateSchema>;

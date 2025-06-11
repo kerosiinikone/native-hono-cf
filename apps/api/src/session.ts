@@ -4,23 +4,31 @@ import {
   ErrorMessage,
   MessageCommand,
   MessageType,
-  StateDeleteMessage,
   StateUpdateMessage,
+  TextDocumentState,
   webSocketMessageSchema,
   WebSocketMessageSchema,
   WSMessage,
 } from "@native-hono-cf/shared";
-import { D1Persistence, DocumentStorage } from "./persistence";
+import {
+  D1Persistence,
+  DocumentObjectModel,
+  DocumentStorage,
+} from "./persistence";
 import { debounce } from "./util";
 
 const DEBOUNCE = 5000;
 
 export class DocumentSession {
-  private clientMap: Map<WebSocket, string> = new Map();
   public state: DocumentState = {
     elements: [],
-    textDocumentState: {},
   };
+  public textState: TextDocumentState = {
+    text: "",
+    heading: "",
+  };
+
+  private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
   private d1Persistence?: D1Persistence;
 
@@ -40,7 +48,7 @@ export class DocumentSession {
     );
   }
 
-  async initialize(initialD1State?: DocumentState | null): Promise<void> {
+  async initialize(initialD1State?: DocumentObjectModel | null): Promise<void> {
     let loadedState = await this.durableObjectStorage._getState();
 
     if (!loadedState && initialD1State) {
@@ -48,7 +56,10 @@ export class DocumentSession {
     }
     this.state = loadedState || this.state;
 
-    await this.durableObjectStorage._putState(this.state);
+    await this.durableObjectStorage._putState({
+      ...this.state,
+      ...this.textState,
+    });
   }
 
   addClient(ws: WebSocket): string {
@@ -106,18 +117,13 @@ export class DocumentSession {
             JSON.stringify({
               type: MessageType.STATE,
               command: MessageCommand.ADD,
-              payload: {
-                content: "canvas", // or "text"
-                state: this.state.elements,
-              }, // This has to also send the text document state
-            } as WSMessage)
+              payload: this.state.elements,
+            })
           );
           // Also send back the text document state if it exists
           break;
         case MessageType.STATE:
-          const stateUpdate = wsMessageValidation.data as
-            | StateUpdateMessage
-            | StateDeleteMessage;
+          const stateUpdate = wsMessageValidation.data as StateUpdateMessage;
 
           if (!stateUpdate || typeof stateUpdate === "string") {
             console.warn(
@@ -129,9 +135,9 @@ export class DocumentSession {
           switch (command) {
             case MessageCommand.DELETE:
               const stateDelete =
-                wsMessageValidation.data as StateDeleteMessage;
+                wsMessageValidation.data as StateUpdateMessage;
               (
-                stateDelete.payload?.state as { elementIds: string[] }
+                stateDelete.payload as { elementIds: string[] }
               ).elementIds.forEach((did) => {
                 this.state.elements = this.state.elements.filter(
                   (element) => element.id !== did
@@ -139,8 +145,8 @@ export class DocumentSession {
               });
               break;
             case MessageCommand.UPDATE:
-              const updatePayload = (stateUpdate as StateUpdateMessage).payload
-                .state as Element;
+              const updatePayload = (stateUpdate as StateUpdateMessage)
+                .payload as Element;
               const elementIdToUpdate = updatePayload.id;
 
               if (
@@ -174,7 +180,7 @@ export class DocumentSession {
               }
               break;
             case MessageCommand.ADD:
-              const { state } = (stateUpdate as StateUpdateMessage).payload;
+              const state = (stateUpdate as StateUpdateMessage).payload;
               this.state.elements = this.state.elements.concat(
                 [state as Element | Element[]].flat()
               );
@@ -245,12 +251,18 @@ export class DocumentSession {
 
   private async _persistToD1Now(): Promise<void> {
     if (this.d1Persistence) {
-      await this.d1Persistence.persistState(this.state);
+      await this.d1Persistence.persistState({
+        ...this.state,
+        ...this.textState,
+      });
     }
   }
 
   async persistState(): Promise<void> {
-    await this.durableObjectStorage._putState(this.state);
+    await this.durableObjectStorage._putState({
+      ...this.state,
+      ...this.textState,
+    });
     if (this.d1Persistence) {
       this.debouncedPersistToD1();
     }
@@ -261,7 +273,10 @@ export class DocumentSession {
       console.log(
         `[DocumentSession] Flushing state to D1 immediately for document...`
       );
-      await this.d1Persistence.persistState(this.state);
+      await this.d1Persistence.persistState({
+        ...this.state,
+        ...this.textState,
+      });
     }
   }
 }
