@@ -1,7 +1,12 @@
 import { SERVER_URL } from "@/constants/server";
 import { useDocumentStore } from "@/state/document";
-import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  MessageCommand,
+  MessageType,
+  TextDocumentStateUpdate,
+  WSMessage,
+} from "@native-hono-cf/shared";
+import { useCallback, useEffect, useRef } from "react";
 
 const BUFFER_INTERVAL = 250;
 
@@ -79,7 +84,6 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
     };
 
     ws.onclose = () => {
-      console.log("WebSocket disconnected");
       if (socketRef.current === ws) {
         socketRef.current = null;
       }
@@ -94,7 +98,6 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
         ws.readyState === WebSocket.OPEN ||
         ws.readyState === WebSocket.CONNECTING
       ) {
-        console.log("Closing WebSocket connection");
         ws.close();
       }
       if (sendBufferIntervalRef.current) {
@@ -104,18 +107,54 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
     };
   }, [documentId]);
 
-  return {
-    bufferMessage: useCallback(
-      (msg: WSMessage) => {
-        if (sendBufferIntervalRef.current == null) {
-          sendBufferIntervalRef.current = setInterval(
-            sendBufferedMessages,
-            BUFFER_INTERVAL
-          );
+  const bufferMessage = useCallback(
+    (msg: WSMessage) => {
+      if (sendBufferIntervalRef.current == null) {
+        sendBufferIntervalRef.current = setInterval(
+          sendBufferedMessages,
+          BUFFER_INTERVAL
+        );
+      }
+
+      // TODO: Improve this logic later
+      const lastMsg =
+        queuedWSMessages.current[queuedWSMessages.current.length - 1];
+      const isBatchable =
+        lastMsg?.type === MessageType.TEXT_STATE &&
+        msg.type === MessageType.TEXT_STATE &&
+        lastMsg.command === MessageCommand.ADD &&
+        msg.command === MessageCommand.ADD;
+
+      if (isBatchable) {
+        // merge the new message
+
+        // these types...
+        const lastMessage = queuedWSMessages.current.pop();
+        if (lastMessage) {
+          const pl = lastMessage.payload as { state: TextDocumentStateUpdate };
+          (lastMessage.payload as { state: TextDocumentStateUpdate }) = {
+            ...lastMessage.payload,
+            state: {
+              ...(msg.payload as { state: TextDocumentStateUpdate }).state,
+              heading:
+                pl.state.heading +
+                ((msg.payload as { state: TextDocumentStateUpdate }).state
+                  .heading || ""),
+              text:
+                pl.state.text +
+                ((msg.payload as { state: TextDocumentStateUpdate }).state
+                  .text || ""),
+            },
+          };
+          msg = lastMessage; // Use the merged message
         }
-        queuedWSMessages.current.push(msg);
-      },
-      [documentId]
-    ),
+      }
+      queuedWSMessages.current.push(msg);
+    },
+    [documentId]
+  );
+
+  return {
+    bufferMessage,
   };
 }

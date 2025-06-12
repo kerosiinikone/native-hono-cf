@@ -81,9 +81,7 @@ export function transformClientObjectToServer(el: ClientElement): Element {
 
 export const withSkia_useCanvasStore = create<State & Actions & RectActions>(
   (set, get) => ({
-    documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
     elements: [],
-    drawingMode: "draw",
     canvasMatrix: makeMutable(Matrix4()),
 
     // Optimize

@@ -42,12 +42,12 @@ export interface TextDocumentState {
 
 export interface TextDocumentStateUpdate {
   heading?: string;
-  headingOffset?: string;
-  headingEnd?: string;
+  headingOffset?: number;
+  headingEnd?: number;
 
   text?: string;
-  textOffset?: string;
-  textEnd?: string;
+  textOffset?: number;
+  textEnd?: number;
 }
 
 export type DocumentStateUpdate =
@@ -56,6 +56,7 @@ export type DocumentStateUpdate =
   | Readonly<{
       elementIds: string[];
     }>;
+
 export interface BaseElementProperties {
   x: number;
   y: number;
@@ -114,7 +115,6 @@ export interface ErrorMessage {
   };
 }
 
-// Can also be sent at the start of a session to set the initial text state
 export interface TextPatchMessage {
   type: MessageType.TEXT_STATE;
   command: StateMessageCommands;

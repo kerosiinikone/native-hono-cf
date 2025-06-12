@@ -70,8 +70,8 @@ export const useDocumentStore = create<State & Actions & TextActions>(
       }
     },
 
-    setTextContent: (content) => null,
-    setTextHeading: (heading) => null,
+    setTextContent: (content) => set({ textContent: content }),
+    setTextHeading: (heading) => set({ textHeading: heading }),
 
     setDocumentId: (id) => set({ documentId: id }),
     setDrawingMode: (mode) => set({ drawingMode: mode }),

@@ -1,12 +1,18 @@
 import { useDocumentStore } from "@/state/document";
 import {
+  MessageCommand,
   MessageType,
-  StateMessageCommands,
+  TextDocumentStateUpdate,
   WSMessage,
 } from "@native-hono-cf/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
+
+type NativeSelection = {
+  start: number;
+  end: number;
+};
 
 interface DocumentScreenProps {
   switchView: () => void;
@@ -16,37 +22,28 @@ interface DocumentScreenProps {
 const HEADING_FONT_SIZE = 40;
 const BODY_FONT_SIZE = 20;
 
-// DocumentHeadingArea now receives value and onChangeText as props
 function DocumentHeadingArea({
   value,
-  onChangeText,
+  onChange,
+  onSelectionChange,
 }: {
   value: string;
-  onChangeText: (text: string) => void;
+  onChange: (newText: string) => void;
+  onSelectionChange: (selection: NativeSelection) => void;
 }) {
   return (
     <TextInput
-      autoFocus={true}
       multiline={true}
-      numberOfLines={1}
-      placeholder="Heading"
       placeholderTextColor="#999"
-      style={{
-        height: 80,
-        textAlignVertical: "top",
-        borderColor: "rgba(0, 0, 0, 0)",
-        borderWidth: 1,
-        fontSize: HEADING_FONT_SIZE,
-        padding: 10,
-        outline: "none",
-      }}
+      placeholder="Heading"
+      onSelectionChange={(e) => onSelectionChange(e.nativeEvent.selection)}
+      style={styles.inputHeading}
       value={value}
-      onChangeText={onChangeText}
+      onChangeText={onChange}
     />
   );
 }
 
-// DocumentBodyArea now receives value and onChangeText as props
 function DocumentBodyArea({
   value,
   onChangeText,
@@ -57,44 +54,15 @@ function DocumentBodyArea({
   const { height } = useWindowDimensions();
   return (
     <TextInput
-      autoFocus={true}
       placeholder="Start writing your document here"
       placeholderTextColor="#999"
       multiline={true}
-      style={{
-        height: height - 220,
-        textAlignVertical: "top",
-        borderColor: "rgba(0, 0, 0, 0)",
-        borderWidth: 1,
-        fontSize: BODY_FONT_SIZE,
-        padding: 10,
-        outline: "none",
-      }}
+      style={[styles.inputBody, { height: height - 220 }]}
       value={value}
       onChangeText={onChangeText}
     />
   );
 }
-
-// Logic for editing the text document
-//
-// SENDING
-//
-// User edits (adds, deletes, modifies) text or/and the heading
-// The start point of the text is recorded as the offset
-// The end point of the added/deleted text is recorded as the end
-// There is an enum that keeps track of the type of action
-// (add, delete, update)
-// Each time the input changes, the local state is updated and a message
-// is debounced with the gelp of a bufferMessage function (or similar)
-//
-// RECEIVING
-//
-// The server sends a message with the type of action and the payload
-// The payload contains the offset and end of the text
-// The local state is computed in the "store" and sent back as a whole
-// This becomes important when inputs are switched between interactable and
-// previews (for Markdown formatting after editing is "done")
 
 export default function DocumentScreen({
   switchView,
@@ -110,51 +78,50 @@ export default function DocumentScreen({
     popMessageFromQueue,
   } = useDocumentStore((state) => state);
 
-  // When true -> TextInputs are active
-  // When false -> TextInputs are replaced with Text components (with Markdown formatting)
-  const [isEditingHeading, setIsEditingHeading] = useState<boolean>(false);
-  const [isEditingBody, setIsEditingBody] = useState<boolean>(false);
+  const headingSelection = useRef<NativeSelection>({ start: 0, end: 0 });
 
   const handleStateReceive = useCallback(
     (msg: WSMessage) => {
-      // const { command, payload } = msg as WSMessage;
-      // setLocalFromServerState(serverState, command);
-      popMessageFromQueue("text");
-    },
-    [documentId]
-  );
+      if (!msg.payload || !documentId) return;
 
-  const sendLocalState = useCallback(
-    <
-      T extends {
-        [key: string]: any; // For now
+      const payloadState = (msg.payload as { state: TextDocumentStateUpdate })
+        .state;
+
+      if (msg.command === MessageCommand.ADD) {
+        if (payloadState.heading) {
+          setTextHeading(textHeading + payloadState.heading);
+        }
+        if (payloadState.text) {
+          setTextContent(textContent + payloadState.text);
+        }
       }
-    >(
-      type: StateMessageCommands
-    ) => {
-      if (!documentId) return;
-
-      bufferMessage({
-        type: MessageType.TEXT_STATE,
-        command: type,
-        payload: {
-          state: {
-            heading: textHeading,
-            text: textContent,
-          },
-        },
-      });
     },
-    [documentId, bufferMessage]
+    [documentId, textHeading, textContent, setTextHeading, setTextContent]
   );
 
-  const setTextHeadingWithUpdate = (text: string) => {
-    // sendLocalState() -> how do I distinguish between editing and adding new text?
-    setTextHeading(text);
+  const handleLocalHeadingChange = (newText: string) => {
+    if (newText.length > textHeading.length) {
+      const diff = newText.slice(textHeading.length).trim();
+      if (!diff) return;
+
+      if (documentId) {
+        bufferMessage({
+          type: MessageType.TEXT_STATE,
+          command: MessageCommand.ADD,
+          payload: {
+            state: {
+              heading: diff,
+              text: "",
+            },
+          },
+        });
+      }
+    }
+    setTextHeading(newText);
   };
 
-  const setTextBodyWithUpdate = (text: string) => {
-    setTextContent(text);
+  const handleLocalBodyChange = (newText: string) => {
+    setTextContent(newText);
   };
 
   useEffect(() => {
@@ -162,28 +129,26 @@ export default function DocumentScreen({
       const message = globalTextMessageQueue[i];
       if (!message || !message.payload) continue;
       if (message.type !== MessageType.TEXT_STATE) continue;
+
       handleStateReceive(message);
+      popMessageFromQueue("text");
     }
-  }, [globalTextMessageQueue, popMessageFromQueue, handleStateReceive]);
+  }, [globalTextMessageQueue, handleStateReceive, popMessageFromQueue]);
 
   return (
     <View style={styles.container}>
       <DocumentToolbar switchView={switchView} />
       <DocumentHeadingArea
         value={textHeading}
-        onChangeText={setTextHeadingWithUpdate}
-      />
-      <View
-        style={{
-          marginTop: 10,
-          marginBottom: 10,
-          borderBottomColor: "#ccc",
-          borderBottomWidth: StyleSheet.hairlineWidth,
+        onChange={handleLocalHeadingChange}
+        onSelectionChange={(selection) => {
+          headingSelection.current = selection;
         }}
       />
+      <View style={styles.separator} />
       <DocumentBodyArea
         value={textContent}
-        onChangeText={setTextBodyWithUpdate}
+        onChangeText={handleLocalBodyChange}
       />
     </View>
   );
@@ -191,8 +156,28 @@ export default function DocumentScreen({
 
 const styles = StyleSheet.create({
   container: {
-    paddingLeft: 50,
-    paddingRight: 50,
+    flex: 1,
+    paddingHorizontal: 50,
     paddingTop: 100,
+    backgroundColor: "#fff",
+  },
+  inputHeading: {
+    height: 80,
+    textAlignVertical: "top",
+    borderColor: "rgba(0, 0, 0, 0)",
+    borderWidth: 0,
+    fontSize: HEADING_FONT_SIZE,
+    padding: 10,
+    outline: "none",
+  },
+  inputBody: {
+    textAlignVertical: "top",
+    fontSize: BODY_FONT_SIZE,
+    padding: 10,
+  },
+  separator: {
+    marginVertical: 10,
+    borderBottomColor: "#ccc",
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
 });

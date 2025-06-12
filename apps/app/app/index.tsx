@@ -13,7 +13,7 @@ export default function DocumentCanvasScreen() {
   const documentId = useDocumentStore((state) => state.documentId);
 
   const { bufferMessage } = useWebSocket({
-    documentId: documentId,
+    documentId,
   });
 
   return (

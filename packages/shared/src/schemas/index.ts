@@ -28,19 +28,19 @@ export const canvasWebSocketMessageSchema = z.object({
     .optional(),
 });
 
+// TODO: z.intersection([]) -> for heading-type messages and text-type messages (seaprate them)
+
 export const textWebSocketMessageSchema = z.object({
   type: z.enum(["text_state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
   payload: z.object({
-    offset: z.string(),
-    end: z.string(),
     state: z.object({
       heading: z.string().optional(),
-      headingOffset: z.string().optional(),
-      headingEnd: z.string().optional(),
+      headingOffset: z.number().optional(),
+      headingEnd: z.number().optional(),
       text: z.string().optional(),
-      textOffset: z.string().optional(),
-      textEnd: z.string().optional(),
+      textOffset: z.number().optional(),
+      textEnd: z.number().optional(),
     }),
   }),
 });

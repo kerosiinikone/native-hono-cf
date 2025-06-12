@@ -6,6 +6,7 @@ import {
   MessageType,
   StateUpdateMessage,
   TextDocumentState,
+  TextDocumentStateUpdate,
   webSocketMessageSchema,
   WebSocketMessageSchema,
   WSMessage,
@@ -120,7 +121,43 @@ export class DocumentSession {
               payload: this.state.elements,
             })
           );
-          // Also send back the text document state if it exists
+          ws.send(
+            JSON.stringify({
+              type: MessageType.TEXT_STATE,
+              command: MessageCommand.ADD,
+              payload: {
+                state: {
+                  heading: this.textState.heading,
+                  text: this.textState.text,
+                },
+              },
+            })
+          );
+          break;
+        case MessageType.TEXT_STATE:
+          // TODO: Safe parse contents?
+          const textStateUpdate = wsMessageValidation.data as {
+            payload: { state: TextDocumentStateUpdate };
+          };
+          switch (command) {
+            case MessageCommand.ADD:
+              if (textStateUpdate.payload.state.heading)
+                this.textState = {
+                  heading:
+                    this.textState.heading +
+                    textStateUpdate.payload.state.heading,
+                  text: this.textState.text,
+                };
+              if (textStateUpdate.payload.state.text)
+                this.textState = {
+                  heading: this.textState.heading,
+                  text:
+                    this.textState.text + textStateUpdate.payload.state.text,
+                };
+              break;
+          }
+          this.broadcast(message as string, this.clientMap.get(ws));
+          this.persistState();
           break;
         case MessageType.STATE:
           const stateUpdate = wsMessageValidation.data as StateUpdateMessage;
@@ -157,7 +194,6 @@ export class DocumentSession {
                 );
                 return;
               }
-
               let found = false;
               this.state.elements = this.state.elements.map((element) => {
                 if (element.id === elementIdToUpdate) {
@@ -172,7 +208,6 @@ export class DocumentSession {
                 }
                 return element;
               });
-
               if (!found) {
                 console.warn(
                   `[DocumentSession] Element with ID '${elementIdToUpdate}' not found. No update performed on elements array.`

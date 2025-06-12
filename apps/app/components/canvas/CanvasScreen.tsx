@@ -36,7 +36,6 @@ export default function CanvasScreen({
     (msg: WSMessage) => {
       const { command, payload } = msg as WSMessage;
       setLocalFromServerState(payload as DocumentStateUpdate, command);
-      popMessageFromQueue("canvas"); // a separate funciotn to pop the message from the queue?
     },
     [documentId]
   );
@@ -57,17 +56,12 @@ export default function CanvasScreen({
   );
 
   useEffect(() => {
-    // Loop all the messages in the queue
-    // If the message is of content "canvas", handle it
-    // BUT, only handle the last UPDATE / ADD for each element ID
-    // -> loop from the end of the queue and keep track of the IDs
-    //
-    // NAIVE IMPLEMENTATION
     for (let i = globalCanvasMessageQueue.length - 1; i >= 0; i--) {
       const message = globalCanvasMessageQueue[i];
       if (!message || !message.payload) continue;
       if (message.type === MessageType.TEXT_STATE) continue;
       handleStateReceive(message);
+      popMessageFromQueue("canvas");
     }
   }, [globalCanvasMessageQueue, popMessageFromQueue, handleStateReceive]);
 
