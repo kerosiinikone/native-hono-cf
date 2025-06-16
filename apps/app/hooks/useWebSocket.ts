@@ -115,40 +115,6 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
           BUFFER_INTERVAL
         );
       }
-
-      // TODO: Improve this logic later
-      const lastMsg =
-        queuedWSMessages.current[queuedWSMessages.current.length - 1];
-      const isBatchable =
-        lastMsg?.type === MessageType.TEXT_STATE &&
-        msg.type === MessageType.TEXT_STATE &&
-        lastMsg.command === MessageCommand.ADD &&
-        msg.command === MessageCommand.ADD;
-
-      if (isBatchable) {
-        // merge the new message
-
-        // these types...
-        const lastMessage = queuedWSMessages.current.pop();
-        if (lastMessage) {
-          const pl = lastMessage.payload as { state: TextDocumentStateUpdate };
-          (lastMessage.payload as { state: TextDocumentStateUpdate }) = {
-            ...lastMessage.payload,
-            state: {
-              ...(msg.payload as { state: TextDocumentStateUpdate }).state,
-              heading:
-                pl.state.heading +
-                ((msg.payload as { state: TextDocumentStateUpdate }).state
-                  .heading || ""),
-              text:
-                pl.state.text +
-                ((msg.payload as { state: TextDocumentStateUpdate }).state
-                  .text || ""),
-            },
-          };
-          msg = lastMessage; // Use the merged message
-        }
-      }
       queuedWSMessages.current.push(msg);
     },
     [documentId]

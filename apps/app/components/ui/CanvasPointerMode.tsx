@@ -7,6 +7,7 @@ export function CanvasPointerMode({ switchView }: { switchView: () => void }) {
     (state) => state
   );
 
+  // Flush??
   const handleSwitchView = useCallback(() => {
     flushState();
     switchView();

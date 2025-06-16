@@ -23,8 +23,10 @@ type State = {
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
+
   pushMessageToQueue: (message: WSMessage) => void;
-  popMessageFromQueue: (type: "text" | "canvas") => WSMessage | undefined;
+  popMessageFromTextQueue: () => WSMessage | undefined;
+  popMessageFromCanvasQueue: () => WSMessage | undefined;
 
   flushState: () => void;
 };
@@ -57,19 +59,8 @@ export const useDocumentStore = create<State & Actions & TextActions>(
         });
       }
     },
-    popMessageFromQueue: (type) => {
-      const { globalTextMessageQueue, globalCanvasMessageQueue } = get();
-      if (type === "text") {
-        if (globalTextMessageQueue.length > 0) {
-          return globalTextMessageQueue.pop();
-        }
-      } else {
-        if (globalCanvasMessageQueue.length > 0) {
-          return globalCanvasMessageQueue.pop();
-        }
-      }
-    },
-
+    popMessageFromTextQueue: () => get().globalTextMessageQueue.pop(),
+    popMessageFromCanvasQueue: () => get().globalCanvasMessageQueue.pop(),
     setTextContent: (content) => set({ textContent: content }),
     setTextHeading: (heading) => set({ textHeading: heading }),
 

@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
+import { diffChars, createPatch } from "diff";
 
 type NativeSelection = {
   start: number;
@@ -19,8 +20,98 @@ interface DocumentScreenProps {
   bufferMessage: (message: WSMessage) => void;
 }
 
-const HEADING_FONT_SIZE = 40;
-const BODY_FONT_SIZE = 20;
+type TextOperation = {
+  text?: string;
+  end?: number;
+  offset?: number;
+};
+
+// TODO: Types for operations?
+// type InsertOperation = { type: 'INSERT'; };
+// type DeleteOperation = { type: 'DELETE'; };
+// type ReplaceOperation = { type: 'REPLACE'; };
+
+const DEFAULT_MSG_PARAMS = {
+  text: "",
+  heading: "",
+  headingEnd: 0,
+  headingOffset: 0,
+};
+
+function getTextUpdate(
+  oldText: string,
+  newText: string,
+  selection: NativeSelection
+): TextOperation | null {
+  const oldLen = oldText.length;
+  const newLen = newText.length;
+
+  const isLonger = newLen > oldLen;
+  const equalSelection = selection.start === selection.end;
+
+  // Concatenation case
+  if (isLonger && equalSelection) {
+    const insertedText = newText.substring(
+      selection.start,
+      selection.start + (newLen - oldLen)
+    );
+    return {
+      text: insertedText.trim(),
+      end: selection.start, // same since the insert happens to a specific index
+      offset: selection.start,
+    };
+  }
+
+  // Simple delete case (without selection)
+  if (
+    !isLonger &&
+    equalSelection &&
+    newText ===
+      oldText.slice(0, selection.start - 1) +
+        oldText.slice(selection.end - 1 + (oldLen - newLen))
+  ) {
+    return {
+      offset: selection.start - 1, // the selection pointer lags behind
+      end: selection.start - 1 + (oldLen - newLen),
+    };
+  }
+
+  // Catch-all modification case (with selection)
+  const diff = diffChars(oldText, newText);
+  let final = "";
+
+  // Order matters here!
+  for (let i = 0; i < diff.length; i++) {
+    const part = diff[i];
+    if (selection.start > 0 && i === 0 && !part?.added && !part?.removed) {
+      if (part?.value.length! > selection.start) {
+        final += part?.value.slice(selection.start, part?.value.length);
+      }
+      continue;
+    }
+    if (
+      selection.end < oldLen &&
+      i === diff.length - 1 &&
+      !part?.added &&
+      !part?.removed
+    ) {
+      if (part?.value.length! > oldLen - selection.end) {
+        final += part?.value.slice(
+          0,
+          part?.value.length - (oldLen - selection.end)
+        );
+      }
+      continue;
+    }
+    if (!part?.removed) final += part?.value;
+  }
+
+  return {
+    text: final.trim(),
+    end: selection.end,
+    offset: selection.start,
+  };
+}
 
 function DocumentHeadingArea({
   value,
@@ -33,11 +124,19 @@ function DocumentHeadingArea({
 }) {
   return (
     <TextInput
+      autoFocus={true}
       multiline={true}
-      placeholderTextColor="#999"
+      numberOfLines={1}
+      onSelectionChange={(event) =>
+        onSelectionChange(event.nativeEvent.selection)
+      }
       placeholder="Heading"
-      onSelectionChange={(e) => onSelectionChange(e.nativeEvent.selection)}
-      style={styles.inputHeading}
+      placeholderTextColor="#999"
+      style={{
+        ...styles.inputHeading,
+        borderColor: "rgba(0, 0, 0, 0)",
+        outline: "none",
+      }}
       value={value}
       onChangeText={onChange}
     />
@@ -57,7 +156,14 @@ function DocumentBodyArea({
       placeholder="Start writing your document here"
       placeholderTextColor="#999"
       multiline={true}
-      style={[styles.inputBody, { height: height - 220 }]}
+      style={[
+        styles.inputBody,
+        {
+          height: height - 220,
+          borderColor: "rgba(0, 0, 0, 0)",
+          outline: "none",
+        },
+      ]}
       value={value}
       onChangeText={onChangeText}
     />
@@ -75,7 +181,7 @@ export default function DocumentScreen({
     setTextContent,
     setTextHeading,
     globalTextMessageQueue,
-    popMessageFromQueue,
+    popMessageFromTextQueue,
   } = useDocumentStore((state) => state);
 
   const headingSelection = useRef<NativeSelection>({ start: 0, end: 0 });
@@ -87,35 +193,46 @@ export default function DocumentScreen({
       const payloadState = (msg.payload as { state: TextDocumentStateUpdate })
         .state;
 
+      let newHeading = textHeading;
+      let newContent = textContent;
+
+      // Switch
       if (msg.command === MessageCommand.ADD) {
         if (payloadState.heading) {
-          setTextHeading(textHeading + payloadState.heading);
+          newHeading = textHeading + payloadState.heading;
         }
         if (payloadState.text) {
-          setTextContent(textContent + payloadState.text);
+          newContent = textContent + payloadState.text;
         }
       }
+      setTextHeading(newHeading);
+      setTextContent(newContent);
     },
     [documentId, textHeading, textContent, setTextHeading, setTextContent]
   );
 
   const handleLocalHeadingChange = (newText: string) => {
-    if (newText.length > textHeading.length) {
-      const diff = newText.slice(textHeading.length).trim();
-      if (!diff) return;
+    if (!documentId) return;
 
-      if (documentId) {
-        bufferMessage({
-          type: MessageType.TEXT_STATE,
-          command: MessageCommand.ADD,
-          payload: {
-            state: {
-              heading: diff,
-              text: "",
-            },
+    const updated = getTextUpdate(
+      textHeading,
+      newText,
+      headingSelection.current
+    );
+
+    if (updated) {
+      bufferMessage({
+        type: MessageType.TEXT_STATE,
+        command: MessageCommand.UPDATE,
+        payload: {
+          state: {
+            ...DEFAULT_MSG_PARAMS,
+            heading: updated.text,
+            headingEnd: updated.end,
+            headingOffset: updated.offset,
           },
-        });
-      }
+        },
+      });
     }
     setTextHeading(newText);
   };
@@ -124,6 +241,9 @@ export default function DocumentScreen({
     setTextContent(newText);
   };
 
+  // Flawed
+  // TODO: Separate logic for deciding on updates (and their order)
+  // And make into a custom hook -> with CanvasScreen as well?
   useEffect(() => {
     for (let i = globalTextMessageQueue.length - 1; i >= 0; i--) {
       const message = globalTextMessageQueue[i];
@@ -131,9 +251,9 @@ export default function DocumentScreen({
       if (message.type !== MessageType.TEXT_STATE) continue;
 
       handleStateReceive(message);
-      popMessageFromQueue("text");
+      popMessageFromTextQueue();
     }
-  }, [globalTextMessageQueue, handleStateReceive, popMessageFromQueue]);
+  }, [globalTextMessageQueue, handleStateReceive, popMessageFromTextQueue]);
 
   return (
     <View style={styles.container}>
@@ -164,15 +284,12 @@ const styles = StyleSheet.create({
   inputHeading: {
     height: 80,
     textAlignVertical: "top",
-    borderColor: "rgba(0, 0, 0, 0)",
-    borderWidth: 0,
-    fontSize: HEADING_FONT_SIZE,
+    fontSize: 40,
     padding: 10,
-    outline: "none",
   },
   inputBody: {
     textAlignVertical: "top",
-    fontSize: BODY_FONT_SIZE,
+    fontSize: 20,
     padding: 10,
   },
   separator: {

@@ -27,7 +27,7 @@ export default function CanvasScreen({
   switchView,
   bufferMessage,
 }: CanvasScreenProps) {
-  const { documentId, globalCanvasMessageQueue, popMessageFromQueue } =
+  const { documentId, globalCanvasMessageQueue, popMessageFromCanvasQueue } =
     useDocumentStore((state) => state);
   const { setLocalFromServerState } = withSkia_useCanvasStore((state) => state);
 
@@ -56,14 +56,16 @@ export default function CanvasScreen({
   );
 
   useEffect(() => {
+    // TODO: Applies all the UPDATEs for the same element in the wrong order
     for (let i = globalCanvasMessageQueue.length - 1; i >= 0; i--) {
       const message = globalCanvasMessageQueue[i];
       if (!message || !message.payload) continue;
       if (message.type === MessageType.TEXT_STATE) continue;
+
       handleStateReceive(message);
-      popMessageFromQueue("canvas");
+      popMessageFromCanvasQueue();
     }
-  }, [globalCanvasMessageQueue, popMessageFromQueue, handleStateReceive]);
+  }, [globalCanvasMessageQueue, popMessageFromCanvasQueue, handleStateReceive]);
 
   return (
     <GestureHandlerRootView style={gStyles.container}>
