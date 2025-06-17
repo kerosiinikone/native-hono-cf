@@ -140,21 +140,11 @@ export class DocumentSession {
             payload: { state: TextDocumentStateUpdate };
           };
           switch (command) {
-            case MessageCommand.ADD:
-              if (textStateUpdate.payload.state.heading)
-                this.textState = {
-                  heading:
-                    this.textState.heading +
-                    textStateUpdate.payload.state.heading,
-                  text: this.textState.text,
-                };
-              if (textStateUpdate.payload.state.text)
-                this.textState = {
-                  heading: this.textState.heading,
-                  text:
-                    this.textState.text + textStateUpdate.payload.state.text,
-                };
+            case MessageCommand.UPDATE:
               break;
+            default:
+              console.warn("Illegal command for TEXT_STATE:", command);
+              return;
           }
           this.broadcast(message as string, this.clientMap.get(ws));
           this.persistState();

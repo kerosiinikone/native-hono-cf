@@ -1,11 +1,6 @@
 import { SERVER_URL } from "@/constants/server";
 import { useDocumentStore } from "@/state/document";
-import {
-  MessageCommand,
-  MessageType,
-  TextDocumentStateUpdate,
-  WSMessage,
-} from "@native-hono-cf/shared";
+import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef } from "react";
 
 const BUFFER_INTERVAL = 250;

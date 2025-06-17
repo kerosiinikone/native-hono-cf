@@ -5,10 +5,11 @@ import {
   TextDocumentStateUpdate,
   WSMessage,
 } from "@native-hono-cf/shared";
+import { diffChars } from "diff";
 import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
-import { diffChars, createPatch } from "diff";
+import { calculateTextUpdate } from "@native-hono-cf/shared";
 
 type NativeSelection = {
   start: number;
@@ -56,7 +57,7 @@ function getTextUpdate(
       selection.start + (newLen - oldLen)
     );
     return {
-      text: insertedText.trim(),
+      text: insertedText,
       end: selection.start, // same since the insert happens to a specific index
       offset: selection.start,
     };
@@ -71,6 +72,7 @@ function getTextUpdate(
         oldText.slice(selection.end - 1 + (oldLen - newLen))
   ) {
     return {
+      text: "",
       offset: selection.start - 1, // the selection pointer lags behind
       end: selection.start - 1 + (oldLen - newLen),
     };
@@ -81,33 +83,28 @@ function getTextUpdate(
   let final = "";
 
   // Order matters here!
-  for (let i = 0; i < diff.length; i++) {
-    const part = diff[i];
-    if (selection.start > 0 && i === 0 && !part?.added && !part?.removed) {
+  diff.forEach((part, i) => {
+    const isUnchanged = !part?.added && !part?.removed;
+    if (selection.start > 0 && i === 0 && isUnchanged) {
       if (part?.value.length! > selection.start) {
         final += part?.value.slice(selection.start, part?.value.length);
       }
-      continue;
+      return;
     }
-    if (
-      selection.end < oldLen &&
-      i === diff.length - 1 &&
-      !part?.added &&
-      !part?.removed
-    ) {
+    if (selection.end < oldLen && i === diff.length - 1 && isUnchanged) {
       if (part?.value.length! > oldLen - selection.end) {
         final += part?.value.slice(
           0,
           part?.value.length - (oldLen - selection.end)
         );
       }
-      continue;
+      return;
     }
     if (!part?.removed) final += part?.value;
-  }
+  });
 
   return {
-    text: final.trim(),
+    text: final,
     end: selection.end,
     offset: selection.start,
   };
@@ -193,24 +190,28 @@ export default function DocumentScreen({
       const payloadState = (msg.payload as { state: TextDocumentStateUpdate })
         .state;
 
-      let newHeading = textHeading;
-      let newContent = textContent;
-
-      // Switch
       if (msg.command === MessageCommand.ADD) {
-        if (payloadState.heading) {
-          newHeading = textHeading + payloadState.heading;
-        }
-        if (payloadState.text) {
-          newContent = textContent + payloadState.text;
-        }
+        // Initial state setup
+        setTextContent(payloadState.text || "");
+        setTextHeading(payloadState.heading || "");
+        return;
       }
-      setTextHeading(newHeading);
-      setTextContent(newContent);
+      if (msg.command !== MessageCommand.UPDATE) return;
+
+      setTextHeading(
+        calculateTextUpdate(
+          textHeading,
+          payloadState.heading,
+          payloadState.headingOffset,
+          payloadState.headingEnd
+        ) || ""
+      );
+      // TODO: setTextContent(newContent);
     },
     [documentId, textHeading, textContent, setTextHeading, setTextContent]
   );
 
+  // TODO: Merge incoming text changes pre-buffer?
   const handleLocalHeadingChange = (newText: string) => {
     if (!documentId) return;
 
