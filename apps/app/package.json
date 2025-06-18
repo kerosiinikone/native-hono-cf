@@ -15,12 +15,15 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@collabs/collabs": "^0.13.4",
+    "@collabs/react": "^0.13.4",
     "@expo/vector-icons": "^14.0.2",
     "@native-hono-cf/shared": "workspace:*",
     "@openspacelabs/react-native-zoomable-view": "^2.4.2",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",
     "@shopify/react-native-skia": "1.5.0",
+    "collabs": "link:@types\\collabs",
     "diff": "^8.0.2",
     "expo": "~52.0.46",
     "expo-blur": "~14.0.3",

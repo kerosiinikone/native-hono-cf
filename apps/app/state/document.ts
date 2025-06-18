@@ -12,66 +12,46 @@ import { create } from "zustand";
 type State = {
   documentId: string | null;
   drawingMode: DrawingMode;
-
   globalTextMessageQueue: WSMessage[];
   globalCanvasMessageQueue: WSMessage[];
-
-  textContent: string;
-  textHeading: string;
 };
 
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
-
   pushMessageToQueue: (message: WSMessage) => void;
   popMessageFromTextQueue: () => WSMessage | undefined;
   popMessageFromCanvasQueue: () => WSMessage | undefined;
-
   flushState: () => void;
 };
 
-// Split text actions to keep the store organized?
-type TextActions = {
-  setTextContent: (content: string) => void;
-  setTextHeading: (heading: string) => void;
-};
+export const useDocumentStore = create<State & Actions>((set, get) => ({
+  documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
+  drawingMode: "draw",
+  globalTextMessageQueue: [],
+  globalCanvasMessageQueue: [],
 
-export const useDocumentStore = create<State & Actions & TextActions>(
-  (set, get) => ({
-    documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
-    drawingMode: "draw",
-    textContent: "",
-    textHeading: "",
-    globalTextMessageQueue: [],
-    globalCanvasMessageQueue: [],
-
-    // Determine type here?
-    pushMessageToQueue: (message) => {
-      const { globalTextMessageQueue, globalCanvasMessageQueue } = get();
-      if (message.type === MessageType.TEXT_STATE) {
-        set({
-          globalTextMessageQueue: [...globalTextMessageQueue, message],
-        });
-      } else {
-        set({
-          globalCanvasMessageQueue: [...globalCanvasMessageQueue, message],
-        });
-      }
-    },
-    popMessageFromTextQueue: () => get().globalTextMessageQueue.pop(),
-    popMessageFromCanvasQueue: () => get().globalCanvasMessageQueue.pop(),
-    setTextContent: (content) => set({ textContent: content }),
-    setTextHeading: (heading) => set({ textHeading: heading }),
-
-    setDocumentId: (id) => set({ documentId: id }),
-    setDrawingMode: (mode) => set({ drawingMode: mode }),
-    flushState: () => {
+  // Determine type here?
+  pushMessageToQueue: (message) => {
+    const { globalTextMessageQueue, globalCanvasMessageQueue } = get();
+    if (message.type === MessageType.TEXT_STATE) {
       set({
-        drawingMode: "draw",
-        textContent: "",
-        textHeading: "",
+        globalTextMessageQueue: [...globalTextMessageQueue, message],
       });
-    },
-  })
-);
+    } else {
+      set({
+        globalCanvasMessageQueue: [...globalCanvasMessageQueue, message],
+      });
+    }
+  },
+  popMessageFromTextQueue: () => get().globalTextMessageQueue.pop(),
+  popMessageFromCanvasQueue: () => get().globalCanvasMessageQueue.pop(),
+
+  setDocumentId: (id) => set({ documentId: id }),
+  setDrawingMode: (mode) => set({ drawingMode: mode }),
+  flushState: () => {
+    set({
+      drawingMode: "draw",
+    });
+  },
+}));

@@ -35,6 +35,12 @@ export interface DocumentState {
   elements: Element[];
 }
 
+export type TextOperation = {
+  text?: string;
+  end?: number;
+  offset?: number;
+};
+
 export interface TextDocumentState {
   heading: string;
   text: string;
@@ -118,9 +124,7 @@ export interface ErrorMessage {
 export interface TextPatchMessage {
   type: MessageType.TEXT_STATE;
   command: StateMessageCommands;
-  payload: {
-    state: TextDocumentStateUpdate;
-  };
+  payload: string;
 }
 
 export type WSMessage =

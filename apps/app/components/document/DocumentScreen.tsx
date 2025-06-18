@@ -1,15 +1,11 @@
 import { useDocumentStore } from "@/state/document";
-import {
-  MessageCommand,
-  MessageType,
-  TextDocumentStateUpdate,
-  WSMessage,
-} from "@native-hono-cf/shared";
-import { diffChars } from "diff";
-import { useCallback, useEffect, useRef } from "react";
+import { AbstractDoc, CVar, DocOptions } from "@collabs/collabs";
+import { useCollab } from "@collabs/react";
+import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
-import { calculateTextUpdate } from "@native-hono-cf/shared";
+import { base64ToUint8Array, uint8ArrayToBase64 } from "@/utils/binary";
 
 type NativeSelection = {
   start: number;
@@ -21,104 +17,43 @@ interface DocumentScreenProps {
   bufferMessage: (message: WSMessage) => void;
 }
 
-type TextOperation = {
-  text?: string;
-  end?: number;
-  offset?: number;
-};
+class TextDoc extends AbstractDoc {
+  // Selections?
+  readonly heading: CVar<string>;
+  readonly content: CVar<string>;
 
-// TODO: Types for operations?
-// type InsertOperation = { type: 'INSERT'; };
-// type DeleteOperation = { type: 'DELETE'; };
-// type ReplaceOperation = { type: 'REPLACE'; };
-
-const DEFAULT_MSG_PARAMS = {
-  text: "",
-  heading: "",
-  headingEnd: 0,
-  headingOffset: 0,
-};
-
-function getTextUpdate(
-  oldText: string,
-  newText: string,
-  selection: NativeSelection
-): TextOperation | null {
-  const oldLen = oldText.length;
-  const newLen = newText.length;
-
-  const isLonger = newLen > oldLen;
-  const equalSelection = selection.start === selection.end;
-
-  // Concatenation case
-  if (isLonger && equalSelection) {
-    const insertedText = newText.substring(
-      selection.start,
-      selection.start + (newLen - oldLen)
+  constructor(options?: DocOptions) {
+    super(options);
+    this.heading = this.runtime.registerCollab(
+      "heading",
+      (init) => new CVar(init, "")
     );
-    return {
-      text: insertedText,
-      end: selection.start, // same since the insert happens to a specific index
-      offset: selection.start,
-    };
+    this.content = this.runtime.registerCollab(
+      "content",
+      (init) => new CVar(init, "")
+    );
   }
 
-  // Simple delete case (without selection)
-  if (
-    !isLonger &&
-    equalSelection &&
-    newText ===
-      oldText.slice(0, selection.start - 1) +
-        oldText.slice(selection.end - 1 + (oldLen - newLen))
-  ) {
-    return {
-      text: "",
-      offset: selection.start - 1, // the selection pointer lags behind
-      end: selection.start - 1 + (oldLen - newLen),
-    };
+  updateContent(text: string) {
+    this.content.set(text);
   }
 
-  // Catch-all modification case (with selection)
-  const diff = diffChars(oldText, newText);
-  let final = "";
-
-  // Order matters here!
-  diff.forEach((part, i) => {
-    const isUnchanged = !part?.added && !part?.removed;
-    if (selection.start > 0 && i === 0 && isUnchanged) {
-      if (part?.value.length! > selection.start) {
-        final += part?.value.slice(selection.start, part?.value.length);
-      }
-      return;
-    }
-    if (selection.end < oldLen && i === diff.length - 1 && isUnchanged) {
-      if (part?.value.length! > oldLen - selection.end) {
-        final += part?.value.slice(
-          0,
-          part?.value.length - (oldLen - selection.end)
-        );
-      }
-      return;
-    }
-    if (!part?.removed) final += part?.value;
-  });
-
-  return {
-    text: final,
-    end: selection.end,
-    offset: selection.start,
-  };
+  updateHeading(text: string) {
+    this.heading.set(text);
+  }
 }
 
 function DocumentHeadingArea({
-  value,
-  onChange,
+  onChangeText,
+  doc,
   onSelectionChange,
 }: {
-  value: string;
-  onChange: (newText: string) => void;
+  doc: TextDoc;
+  onChangeText: (text: string) => void;
   onSelectionChange: (selection: NativeSelection) => void;
 }) {
+  useCollab(doc.content);
+
   return (
     <TextInput
       autoFocus={true}
@@ -134,25 +69,31 @@ function DocumentHeadingArea({
         borderColor: "rgba(0, 0, 0, 0)",
         outline: "none",
       }}
-      value={value}
-      onChangeText={onChange}
+      onChangeText={onChangeText}
     />
   );
 }
 
 function DocumentBodyArea({
-  value,
   onChangeText,
+  doc,
+  onSelectionChange,
 }: {
-  value: string;
+  doc: TextDoc;
   onChangeText: (text: string) => void;
+  onSelectionChange: (selection: NativeSelection) => void;
 }) {
   const { height } = useWindowDimensions();
+  useCollab(doc.content);
+
   return (
     <TextInput
       placeholder="Start writing your document here"
       placeholderTextColor="#999"
       multiline={true}
+      onSelectionChange={(event) =>
+        onSelectionChange(event.nativeEvent.selection)
+      }
       style={[
         styles.inputBody,
         {
@@ -161,7 +102,7 @@ function DocumentBodyArea({
           outline: "none",
         },
       ]}
-      value={value}
+      value={doc.content.value}
       onChangeText={onChangeText}
     />
   );
@@ -171,75 +112,50 @@ export default function DocumentScreen({
   switchView,
   bufferMessage,
 }: DocumentScreenProps) {
-  const {
-    documentId,
-    textContent,
-    textHeading,
-    setTextContent,
-    setTextHeading,
-    globalTextMessageQueue,
-    popMessageFromTextQueue,
-  } = useDocumentStore((state) => state);
+  const { documentId, globalTextMessageQueue, popMessageFromTextQueue } =
+    useDocumentStore((state) => state);
 
   const headingSelection = useRef<NativeSelection>({ start: 0, end: 0 });
+  const contentSelection = useRef<NativeSelection>({ start: 0, end: 0 });
+
+  const docRef = useRef<TextDoc | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const handleStateReceive = useCallback(
     (msg: WSMessage) => {
-      if (!msg.payload || !documentId) return;
+      if (!docRef.current) return;
+      if (msg.type !== MessageType.TEXT_STATE || !msg.payload) return;
 
-      const payloadState = (msg.payload as { state: TextDocumentStateUpdate })
-        .state;
-
-      if (msg.command === MessageCommand.ADD) {
-        // Initial state setup
-        setTextContent(payloadState.text || "");
-        setTextHeading(payloadState.heading || "");
-        return;
-      }
-      if (msg.command !== MessageCommand.UPDATE) return;
-
-      setTextHeading(
-        calculateTextUpdate(
-          textHeading,
-          payloadState.heading,
-          payloadState.headingOffset,
-          payloadState.headingEnd
-        ) || ""
-      );
-      // TODO: setTextContent(newContent);
+      const base64 = msg.payload;
+      docRef.current.receive(base64ToUint8Array(base64));
     },
-    [documentId, textHeading, textContent, setTextHeading, setTextContent]
+    [documentId, docRef, bufferMessage]
   );
 
-  // TODO: Merge incoming text changes pre-buffer?
-  const handleLocalHeadingChange = (newText: string) => {
+  // Later -> this should be in the store (init)!
+  useEffect(() => {
     if (!documentId) return;
-
-    const updated = getTextUpdate(
-      textHeading,
-      newText,
-      headingSelection.current
-    );
-
-    if (updated) {
+    docRef.current = new TextDoc();
+    docRef.current.on("Send", (e) => {
       bufferMessage({
         type: MessageType.TEXT_STATE,
         command: MessageCommand.UPDATE,
-        payload: {
-          state: {
-            ...DEFAULT_MSG_PARAMS,
-            heading: updated.text,
-            headingEnd: updated.end,
-            headingOffset: updated.offset,
-          },
-        },
+        payload: uint8ArrayToBase64(e.message),
       });
-    }
-    setTextHeading(newText);
+    });
+    setLoaded(true);
+  }, [documentId]);
+
+  // TODO: Merge incoming text changes pre-buffer?
+  const handleLocalHeadingChange = (newText: string) => {
+    if (!docRef.current) return;
+    docRef.current.updateHeading(newText);
   };
 
+  // Interface between the input and the document state
   const handleLocalBodyChange = (newText: string) => {
-    setTextContent(newText);
+    if (!docRef.current) return;
+    docRef.current.updateContent(newText);
   };
 
   // Flawed
@@ -259,18 +175,25 @@ export default function DocumentScreen({
   return (
     <View style={styles.container}>
       <DocumentToolbar switchView={switchView} />
-      <DocumentHeadingArea
-        value={textHeading}
-        onChange={handleLocalHeadingChange}
-        onSelectionChange={(selection) => {
-          headingSelection.current = selection;
-        }}
-      />
+      {loaded && docRef.current !== null && (
+        <DocumentHeadingArea
+          doc={docRef.current}
+          onChangeText={handleLocalHeadingChange}
+          onSelectionChange={(selection) => {
+            headingSelection.current = selection;
+          }}
+        />
+      )}
       <View style={styles.separator} />
-      <DocumentBodyArea
-        value={textContent}
-        onChangeText={handleLocalBodyChange}
-      />
+      {loaded && docRef.current !== null && (
+        <DocumentBodyArea
+          doc={docRef.current}
+          onSelectionChange={(selection) => {
+            contentSelection.current = selection;
+          }}
+          onChangeText={handleLocalBodyChange}
+        />
+      )}
     </View>
   );
 }

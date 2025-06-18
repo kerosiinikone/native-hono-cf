@@ -1,4 +1,5 @@
 import {
+  calculateTextUpdate,
   DocumentState,
   Element,
   ErrorMessage,
@@ -28,11 +29,9 @@ export class DocumentSession {
     text: "",
     heading: "",
   };
-
   private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
   private d1Persistence?: D1Persistence;
-
   private debouncedPersistToD1: () => void;
 
   constructor(
@@ -57,6 +56,7 @@ export class DocumentSession {
     }
     this.state = loadedState || this.state;
 
+    // _.merge()
     await this.durableObjectStorage._putState({
       ...this.state,
       ...this.textState,
@@ -121,44 +121,46 @@ export class DocumentSession {
               payload: this.state.elements,
             })
           );
-          ws.send(
-            JSON.stringify({
-              type: MessageType.TEXT_STATE,
-              command: MessageCommand.ADD,
-              payload: {
-                state: {
-                  heading: this.textState.heading,
-                  text: this.textState.text,
-                },
-              },
-            })
-          );
+          // ws.send(
+          //   JSON.stringify({
+          //     type: MessageType.TEXT_STATE,
+          //     command: MessageCommand.ADD,
+          //     payload: {
+          //       state: {
+          //         heading: this.textState.heading,
+          //         text: this.textState.text,
+          //       },
+          //     },
+          //   })
+          // );
           break;
         case MessageType.TEXT_STATE:
-          // TODO: Safe parse contents?
-          const textStateUpdate = wsMessageValidation.data as {
-            payload: { state: TextDocumentStateUpdate };
-          };
           switch (command) {
             case MessageCommand.UPDATE:
+              // The server should have a TextDoc of its own
+              // It is loaded from the D1 database and sent
+              // to the client initially
+              //
+              // On each update it is updated and
+              // therefore also "holds the truth"
+              // for subsequent new clients that connect!
               break;
             default:
               console.warn("Illegal command for TEXT_STATE:", command);
               return;
           }
           this.broadcast(message as string, this.clientMap.get(ws));
+          // Make sure the persisiting is done correctly
           this.persistState();
           break;
         case MessageType.STATE:
           const stateUpdate = wsMessageValidation.data as StateUpdateMessage;
-
           if (!stateUpdate || typeof stateUpdate === "string") {
             console.warn(
               "[DocumentSession] Received STATE update without state."
             );
             this.state = Object.assign(this.state, stateUpdate);
           }
-
           switch (command) {
             case MessageCommand.DELETE:
               const stateDelete =
@@ -175,7 +177,6 @@ export class DocumentSession {
               const updatePayload = (stateUpdate as StateUpdateMessage)
                 .payload as Element;
               const elementIdToUpdate = updatePayload.id;
-
               if (
                 !this.state.elements.some((el) => el.id === elementIdToUpdate)
               ) {

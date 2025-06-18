@@ -33,16 +33,8 @@ export const canvasWebSocketMessageSchema = z.object({
 export const textWebSocketMessageSchema = z.object({
   type: z.enum(["text_state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
-  payload: z.object({
-    state: z.object({
-      heading: z.string().optional(),
-      headingOffset: z.number().optional(),
-      headingEnd: z.number().optional(),
-      text: z.string().optional(),
-      textOffset: z.number().optional(),
-      textEnd: z.number().optional(),
-    }),
-  }),
+  // Uint8Array
+  payload: z.any().optional(),
 });
 
 export const webSocketMessageSchema = z.union([
