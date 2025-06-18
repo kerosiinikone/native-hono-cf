@@ -18,8 +18,8 @@ interface UseWebSocketOptions {
 export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
   const queuedWSMessages = useRef<WSMessage[]>([]);
-  const pushMessageToQueue = useDocumentStore(
-    (state) => state.pushMessageToQueue
+  const receiveRemoteMessage = useDocumentStore(
+    (state) => state.receiveRemoteMessage
   );
   const sendBufferIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -67,7 +67,15 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
 
     ws.onmessage = (event) => {
       try {
-        pushMessageToQueue(JSON.parse(event.data as string));
+        const msg = JSON.parse(event.data as string) as WSMessage;
+        if (msg.type === MessageType.ERROR) {
+          console.error(
+            "WebSocket error message received:",
+            msg.payload.message
+          );
+          return;
+        }
+        receiveRemoteMessage(msg);
       } catch (e) {
         console.warn("Error processing WebSocket message:", e);
       }
@@ -115,7 +123,24 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
     [documentId]
   );
 
+  const sendWithoutBuffer = useCallback(
+    (msg: WSMessage) => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        try {
+          socketRef.current.send(JSON.stringify(msg));
+        } catch (e) {
+          console.error("Error sending message without buffer:", e, msg);
+        }
+      } else {
+        console.warn("WebSocket is not open, buffering message instead.");
+        bufferMessage(msg);
+      }
+    },
+    [documentId, bufferMessage]
+  );
+
   return {
     bufferMessage,
+    sendWithoutBuffer,
   };
 }

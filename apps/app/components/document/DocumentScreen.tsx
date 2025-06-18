@@ -1,11 +1,10 @@
-import { useDocumentStore } from "@/state/document";
-import { AbstractDoc, CVar, DocOptions } from "@collabs/collabs";
+import { TextDoc, useDocumentStore } from "@/state/document";
+import { uint8ArrayToBase64 } from "@/utils/binary";
 import { useCollab } from "@collabs/react";
 import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
-import { base64ToUint8Array, uint8ArrayToBase64 } from "@/utils/binary";
 
 type NativeSelection = {
   start: number;
@@ -14,46 +13,24 @@ type NativeSelection = {
 
 interface DocumentScreenProps {
   switchView: () => void;
-  bufferMessage: (message: WSMessage) => void;
+  sendWithoutBuffer: (message: WSMessage) => void;
 }
 
-class TextDoc extends AbstractDoc {
-  // Selections?
-  readonly heading: CVar<string>;
-  readonly content: CVar<string>;
-
-  constructor(options?: DocOptions) {
-    super(options);
-    this.heading = this.runtime.registerCollab(
-      "heading",
-      (init) => new CVar(init, "")
-    );
-    this.content = this.runtime.registerCollab(
-      "content",
-      (init) => new CVar(init, "")
-    );
-  }
-
-  updateContent(text: string) {
-    this.content.set(text);
-  }
-
-  updateHeading(text: string) {
-    this.heading.set(text);
-  }
-}
+const THROTTLE_DELAY = 300;
 
 function DocumentHeadingArea({
   onChangeText,
   doc,
+  optimistic,
   onSelectionChange,
 }: {
   doc: TextDoc;
+  optimistic: string;
   onChangeText: (text: string) => void;
   onSelectionChange: (selection: NativeSelection) => void;
 }) {
-  useCollab(doc.content);
-
+  useCollab(doc.heading);
+  const text = optimistic !== "" ? optimistic : doc.heading.value;
   return (
     <TextInput
       autoFocus={true}
@@ -70,6 +47,7 @@ function DocumentHeadingArea({
         outline: "none",
       }}
       onChangeText={onChangeText}
+      value={text}
     />
   );
 }
@@ -77,15 +55,17 @@ function DocumentHeadingArea({
 function DocumentBodyArea({
   onChangeText,
   doc,
+  optimistic,
   onSelectionChange,
 }: {
   doc: TextDoc;
+  optimistic: string;
   onChangeText: (text: string) => void;
   onSelectionChange: (selection: NativeSelection) => void;
 }) {
   const { height } = useWindowDimensions();
   useCollab(doc.content);
-
+  const text = optimistic !== "" ? optimistic : doc.content.value;
   return (
     <TextInput
       placeholder="Start writing your document here"
@@ -102,7 +82,7 @@ function DocumentBodyArea({
           outline: "none",
         },
       ]}
-      value={doc.content.value}
+      value={text}
       onChangeText={onChangeText}
     />
   );
@@ -110,87 +90,118 @@ function DocumentBodyArea({
 
 export default function DocumentScreen({
   switchView,
-  bufferMessage,
+  sendWithoutBuffer,
 }: DocumentScreenProps) {
-  const { documentId, globalTextMessageQueue, popMessageFromTextQueue } =
-    useDocumentStore((state) => state);
+  const { documentId, doc, bindStore } = useDocumentStore((state) => state);
 
-  const headingSelection = useRef<NativeSelection>({ start: 0, end: 0 });
-  const contentSelection = useRef<NativeSelection>({ start: 0, end: 0 });
+  const [optimisticHeading, setOptimisticHeading] = useState("");
+  const [optimisticContent, setOptimisticContent] = useState("");
 
-  const docRef = useRef<TextDoc | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  const handleStateReceive = useCallback(
-    (msg: WSMessage) => {
-      if (!docRef.current) return;
-      if (msg.type !== MessageType.TEXT_STATE || !msg.payload) return;
+  const isThrottling = useRef(false);
+  const crdtActionBuffer = useRef<
+    { content: string; type: "heading" | "content" }[]
+  >([]);
 
-      const base64 = msg.payload;
-      docRef.current.receive(base64ToUint8Array(base64));
-    },
-    [documentId, docRef, bufferMessage]
-  );
+  const throttleTransaction = useCallback(() => {
+    const batchedActions = crdtActionBuffer.current;
+    crdtActionBuffer.current = [];
+    if (batchedActions.length === 0) {
+      isThrottling.current = false;
+      return;
+    }
+    doc!.transact(() => {
+      for (const change of batchedActions) {
+        if (change.type === "heading") {
+          doc!.heading.set(change.content);
+        }
+        if (change.type === "content") {
+          doc!.content.set(change.content);
+        }
+      }
+    });
+    isThrottling.current = false;
+  }, [doc]);
 
-  // Later -> this should be in the store (init)!
   useEffect(() => {
     if (!documentId) return;
-    docRef.current = new TextDoc();
-    docRef.current.on("Send", (e) => {
-      bufferMessage({
+
+    const doc = new TextDoc();
+    bindStore(doc);
+
+    doc.on("Send", (e) => {
+      if (isThrottling.current) return;
+      sendWithoutBuffer({
         type: MessageType.TEXT_STATE,
         command: MessageCommand.UPDATE,
         payload: uint8ArrayToBase64(e.message),
       });
     });
+
     setLoaded(true);
   }, [documentId]);
 
-  // TODO: Merge incoming text changes pre-buffer?
-  const handleLocalHeadingChange = (newText: string) => {
-    if (!docRef.current) return;
-    docRef.current.updateHeading(newText);
-  };
+  const handleLocalHeadingChange = useCallback(
+    (newText: string) => {
+      if (!doc) return;
+      const currentHeading = optimisticHeading.concat(newText);
+      setOptimisticHeading(currentHeading);
+      crdtActionBuffer.current.push({
+        content: currentHeading,
+        type: "heading",
+      });
+
+      if (isThrottling.current) {
+        return;
+      }
+      setTimeout(() => {
+        throttleTransaction();
+        setOptimisticHeading("");
+      }, THROTTLE_DELAY);
+    },
+    [doc, documentId]
+  );
 
   // Interface between the input and the document state
-  const handleLocalBodyChange = (newText: string) => {
-    if (!docRef.current) return;
-    docRef.current.updateContent(newText);
-  };
+  const handleLocalBodyChange = useCallback(
+    (newText: string) => {
+      if (!doc) return;
+      const currentContent = optimisticContent.concat(newText);
+      setOptimisticContent(currentContent);
+      crdtActionBuffer.current.push({
+        content: currentContent,
+        type: "content",
+      });
 
-  // Flawed
-  // TODO: Separate logic for deciding on updates (and their order)
-  // And make into a custom hook -> with CanvasScreen as well?
-  useEffect(() => {
-    for (let i = globalTextMessageQueue.length - 1; i >= 0; i--) {
-      const message = globalTextMessageQueue[i];
-      if (!message || !message.payload) continue;
-      if (message.type !== MessageType.TEXT_STATE) continue;
-
-      handleStateReceive(message);
-      popMessageFromTextQueue();
-    }
-  }, [globalTextMessageQueue, handleStateReceive, popMessageFromTextQueue]);
+      if (isThrottling.current) {
+        return;
+      }
+      setTimeout(() => {
+        throttleTransaction();
+        setOptimisticContent("");
+      }, THROTTLE_DELAY);
+    },
+    [doc, documentId]
+  );
 
   return (
     <View style={styles.container}>
       <DocumentToolbar switchView={switchView} />
-      {loaded && docRef.current !== null && (
+      {loaded && doc && (
         <DocumentHeadingArea
-          doc={docRef.current}
+          doc={doc}
           onChangeText={handleLocalHeadingChange}
-          onSelectionChange={(selection) => {
-            headingSelection.current = selection;
-          }}
+          optimistic={optimisticHeading}
+          onSelectionChange={(selection) => {}}
         />
       )}
       <View style={styles.separator} />
-      {loaded && docRef.current !== null && (
+      {loaded && doc && (
         <DocumentBodyArea
-          doc={docRef.current}
-          onSelectionChange={(selection) => {
-            contentSelection.current = selection;
-          }}
+          doc={doc}
+          optimistic={optimisticContent}
+          onSelectionChange={(selection) => {}}
           onChangeText={handleLocalBodyChange}
         />
       )}

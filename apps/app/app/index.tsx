@@ -12,7 +12,7 @@ export default function DocumentCanvasScreen() {
   const [screenView, setScreenView] = useState<number>(0); // 0 for CanvasScreen, 1 for another screen if needed
   const documentId = useDocumentStore((state) => state.documentId);
 
-  const { bufferMessage } = useWebSocket({
+  const { bufferMessage, sendWithoutBuffer } = useWebSocket({
     documentId,
   });
 
@@ -31,7 +31,7 @@ export default function DocumentCanvasScreen() {
       ) : (
         <DocumentScreen
           switchView={() => setScreenView(0)}
-          bufferMessage={bufferMessage}
+          sendWithoutBuffer={sendWithoutBuffer}
         />
       )}
     </View>
