@@ -1,7 +1,11 @@
 import { TextDoc, useDocumentStore } from "@/state/document";
-import { uint8ArrayToBase64 } from "@/utils/binary";
 import { useCollab } from "@collabs/react";
-import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
+import {
+  MessageCommand,
+  MessageType,
+  uint8ArrayToBase64,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
@@ -126,10 +130,10 @@ export default function DocumentScreen({
 
   useEffect(() => {
     if (!documentId) return;
-
     const doc = new TextDoc();
     bindStore(doc);
 
+    // This has to be bound here since it uses the WS hook function
     doc.on("Send", (e) => {
       if (isThrottling.current) return;
       sendWithoutBuffer({
@@ -145,8 +149,10 @@ export default function DocumentScreen({
   const handleLocalHeadingChange = useCallback(
     (newText: string) => {
       if (!doc) return;
+
       const currentHeading = optimisticHeading.concat(newText);
       setOptimisticHeading(currentHeading);
+
       crdtActionBuffer.current.push({
         content: currentHeading,
         type: "heading",
@@ -167,8 +173,10 @@ export default function DocumentScreen({
   const handleLocalBodyChange = useCallback(
     (newText: string) => {
       if (!doc) return;
+
       const currentContent = optimisticContent.concat(newText);
       setOptimisticContent(currentContent);
+
       crdtActionBuffer.current.push({
         content: currentContent,
         type: "content",
@@ -193,7 +201,7 @@ export default function DocumentScreen({
           doc={doc}
           onChangeText={handleLocalHeadingChange}
           optimistic={optimisticHeading}
-          onSelectionChange={(selection) => {}}
+          onSelectionChange={(_) => {}}
         />
       )}
       <View style={styles.separator} />
@@ -201,7 +209,7 @@ export default function DocumentScreen({
         <DocumentBodyArea
           doc={doc}
           optimistic={optimisticContent}
-          onSelectionChange={(selection) => {}}
+          onSelectionChange={(_) => {}}
           onChangeText={handleLocalBodyChange}
         />
       )}

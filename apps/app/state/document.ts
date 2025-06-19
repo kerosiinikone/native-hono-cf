@@ -1,12 +1,17 @@
-import { base64ToUint8Array } from "@/utils/binary";
 import { AbstractDoc, CVar, DocOptions } from "@collabs/collabs";
-import { DrawingMode, MessageType, WSMessage } from "@native-hono-cf/shared";
+import {
+  base64ToUint8Array,
+  DrawingMode,
+  MessageType,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import { create } from "zustand";
 
 type State = {
   documentId: string | null;
   drawingMode: DrawingMode;
   globalCanvasMessageQueue: WSMessage[];
+  uncommitedChanges: Uint8Array<ArrayBufferLike>;
 };
 
 type Actions = {
@@ -15,9 +20,12 @@ type Actions = {
   pushMessageToQueue: (message: WSMessage) => void;
   popMessageFromCanvasQueue: () => WSMessage | undefined;
   receiveRemoteMessage: (message: WSMessage) => void;
-  flushState: () => void;
   bindStore: (instance: TextDoc) => void;
+
+  flushState: () => void;
 };
+
+const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
 
 export class TextDoc extends AbstractDoc {
   readonly heading: CVar<string>;
@@ -50,22 +58,30 @@ export const useDocumentStore = create<
       doc: TextDoc | null;
     }
 >((set, get) => ({
-  documentId: "289d4f3c-3617-45cb-a696-15ed24386388",
+  documentId: TEST_DOCUMENT_ID,
   drawingMode: "draw",
   globalTextMessageQueue: [],
   globalCanvasMessageQueue: [],
   doc: null,
+  uncommitedChanges: new Uint8Array(),
 
   bindStore: (instance: TextDoc) => {
+    const uncommitedChanges = get().uncommitedChanges;
+    if (uncommitedChanges.length > 0) {
+      instance.receive(uncommitedChanges);
+    }
     set({ doc: instance });
   },
   receiveRemoteMessage: (message) => {
     switch (message.type) {
       case MessageType.TEXT_STATE:
         const doc = get().doc;
-        if (!message.payload || !doc) return;
+        if (!message.payload) return;
         const base64 = message.payload;
-        doc.receive(base64ToUint8Array(base64));
+        const buff = base64ToUint8Array(base64);
+        if (buff.length === 0) return;
+        if (doc) doc.receive(buff);
+        else get().uncommitedChanges = buff;
         break;
       default:
         get().pushMessageToQueue(message);

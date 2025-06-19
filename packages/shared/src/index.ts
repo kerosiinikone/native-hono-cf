@@ -1,3 +1,3 @@
 export * from "./types";
 export * from "./schemas";
-export * from "./util";
+export * from "./utils/binary";

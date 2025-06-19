@@ -1,10 +1,8 @@
 import { documentSchema } from "@native-hono-cf/shared";
 import { Hono } from "hono";
 import { validator } from "hono/validator";
-import { WebSocketServer } from "./durable";
 import { z } from "zod";
-
-// TODO: Authentication, authorization
+import { WebSocketServer } from "./durable";
 
 type Bindings = {
   DB: D1Database;

@@ -1,5 +1,5 @@
 import {
-  calculateTextUpdate,
+  base64ToUint8Array,
   DocumentState,
   Element,
   ErrorMessage,
@@ -7,7 +7,7 @@ import {
   MessageType,
   StateUpdateMessage,
   TextDocumentState,
-  TextDocumentStateUpdate,
+  uint8ArrayToBase64,
   webSocketMessageSchema,
   WebSocketMessageSchema,
   WSMessage,
@@ -18,6 +18,7 @@ import {
   DocumentStorage,
 } from "./persistence";
 import { debounce } from "./util";
+import { mergeMessages } from "@collabs/collabs";
 
 const DEBOUNCE = 5000;
 
@@ -25,10 +26,9 @@ export class DocumentSession {
   public state: DocumentState = {
     elements: [],
   };
-  public textState: TextDocumentState = {
-    text: "",
-    heading: "",
-  };
+  // Kept for logs since TextDoc cannot be used in this runtime environment
+  private textDocBufferState: Uint8Array<ArrayBufferLike> = new Uint8Array();
+
   private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
   private d1Persistence?: D1Persistence;
@@ -50,17 +50,18 @@ export class DocumentSession {
 
   async initialize(initialD1State?: DocumentObjectModel | null): Promise<void> {
     let loadedState = await this.durableObjectStorage._getState();
-
     if (!loadedState && initialD1State) {
       loadedState = initialD1State;
     }
-    this.state = loadedState || this.state;
-
+    this.state = { elements: loadedState?.elements || [] };
+    // Load -> get the buffer from D1 and apply it to the textDocBufferState
+    if (loadedState?.textDocLogBuffer) {
+      this.textDocBufferState = base64ToUint8Array(
+        loadedState.textDocLogBuffer
+      );
+    }
     // _.merge()
-    await this.durableObjectStorage._putState({
-      ...this.state,
-      ...this.textState,
-    });
+    await this.durableObjectStorage._putState(this.state);
   }
 
   addClient(ws: WebSocket): string {
@@ -121,18 +122,16 @@ export class DocumentSession {
               payload: this.state.elements,
             })
           );
-          // ws.send(
-          //   JSON.stringify({
-          //     type: MessageType.TEXT_STATE,
-          //     command: MessageCommand.ADD,
-          //     payload: {
-          //       state: {
-          //         heading: this.textState.heading,
-          //         text: this.textState.text,
-          //       },
-          //     },
-          //   })
-          // );
+          ws.send(
+            JSON.stringify({
+              type: MessageType.TEXT_STATE,
+              command: MessageCommand.ADD,
+              payload:
+                this.textDocBufferState.length > 0
+                  ? uint8ArrayToBase64(this.textDocBufferState)
+                  : undefined,
+            })
+          );
           break;
         case MessageType.TEXT_STATE:
           switch (command) {
@@ -144,13 +143,16 @@ export class DocumentSession {
               // On each update it is updated and
               // therefore also "holds the truth"
               // for subsequent new clients that connect!
+              const buffer = (wsMessageValidation.data as WSMessage)
+                .payload as string;
+              const bytes = base64ToUint8Array(buffer);
+              this.textDocBufferState = this.mergeTextDocMessages(bytes);
               break;
             default:
               console.warn("Illegal command for TEXT_STATE:", command);
               return;
           }
           this.broadcast(message as string, this.clientMap.get(ws));
-          // Make sure the persisiting is done correctly
           this.persistState();
           break;
         case MessageType.STATE:
@@ -258,6 +260,14 @@ export class DocumentSession {
     }
   }
 
+  private mergeTextDocMessages(
+    messages: Uint8Array<ArrayBufferLike>
+  ): Uint8Array<ArrayBufferLike> {
+    if (messages.length === 0) return this.textDocBufferState;
+    if (this.textDocBufferState.length === 0) return messages;
+    return mergeMessages([this.textDocBufferState, messages]);
+  }
+
   private broadcast(msg: string, senderId?: string): void {
     this.clientMap.forEach((clientId, ws) => {
       if (ws.readyState === WebSocket.OPEN && clientId !== senderId) {
@@ -279,7 +289,7 @@ export class DocumentSession {
     if (this.d1Persistence) {
       await this.d1Persistence.persistState({
         ...this.state,
-        ...this.textState,
+        textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
       });
     }
   }
@@ -287,7 +297,7 @@ export class DocumentSession {
   async persistState(): Promise<void> {
     await this.durableObjectStorage._putState({
       ...this.state,
-      ...this.textState,
+      textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
     });
     if (this.d1Persistence) {
       this.debouncedPersistToD1();
@@ -301,7 +311,7 @@ export class DocumentSession {
       );
       await this.d1Persistence.persistState({
         ...this.state,
-        ...this.textState,
+        textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
       });
     }
   }

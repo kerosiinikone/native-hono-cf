@@ -1,6 +1,8 @@
-import { DocumentState, TextDocumentState } from "@native-hono-cf/shared";
+import { DocumentState } from "@native-hono-cf/shared";
 
-export type DocumentObjectModel = DocumentState & TextDocumentState;
+export type DocumentObjectModel = DocumentState & {
+  textDocLogBuffer?: string;
+};
 
 export interface DocumentStorage {
   _getState(): Promise<DocumentObjectModel | null>;

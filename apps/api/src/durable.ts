@@ -11,7 +11,6 @@ export class WebSocketServer extends DurableObject {
 
     this.ctx.blockConcurrencyWhile(async () => {
       this.documentId = (await ctx.storage.get("id")) as string;
-
       const doStorage = new DObjectStorage(this.ctx.storage);
       const d1Persistence = new D1Persistence(env.DB, this.documentId);
 

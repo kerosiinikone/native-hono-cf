@@ -33,8 +33,8 @@ export const canvasWebSocketMessageSchema = z.object({
 export const textWebSocketMessageSchema = z.object({
   type: z.enum(["text_state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
-  // Uint8Array
-  payload: z.any().optional(),
+  // Uint8Array -> base64 string
+  payload: z.string(),
 });
 
 export const webSocketMessageSchema = z.union([
@@ -42,6 +42,7 @@ export const webSocketMessageSchema = z.union([
   textWebSocketMessageSchema,
 ]);
 
+export type TextMessageSchema = z.infer<typeof textWebSocketMessageSchema>;
 export type DocumentSchema = z.infer<typeof documentSchema>;
 export type DocumentStateSchema = z.infer<typeof documentStateSchema>;
 export type WebSocketMessageSchema = z.infer<typeof webSocketMessageSchema>;
