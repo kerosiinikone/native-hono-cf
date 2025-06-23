@@ -7,7 +7,17 @@ import {
   WSMessage,
 } from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, TextInput, useWindowDimensions, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
+import Markdown from "react-native-markdown-display";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
 
 type NativeSelection = {
@@ -56,6 +66,10 @@ function DocumentHeadingArea({
   );
 }
 
+// TODO: Markdown font sizes!
+// Fix the overflow issue with Markdown rendering
+// Make sure styles are applied correctly and set in the right place
+
 function DocumentBodyArea({
   onChangeText,
   doc,
@@ -69,26 +83,72 @@ function DocumentBodyArea({
 }) {
   const { height } = useWindowDimensions();
   useCollab(doc.content);
+
   const text = optimistic !== "" ? optimistic : doc.content.value;
+  const [focused, setFocused] = useState<boolean>(false);
+
   return (
-    <TextInput
-      placeholder="Start writing your document here"
-      placeholderTextColor="#999"
-      multiline={true}
-      onSelectionChange={(event) =>
-        onSelectionChange(event.nativeEvent.selection)
-      }
-      style={[
-        styles.inputBody,
-        {
-          height: height - 220,
-          borderColor: "rgba(0, 0, 0, 0)",
-          outline: "none",
-        },
-      ]}
-      value={text}
-      onChangeText={onChangeText}
-    />
+    <>
+      {focused ? (
+        <KeyboardAvoidingView>
+          <ScrollView>
+            <TextInput
+              placeholder="Start writing your document here (markdown supported)"
+              placeholderTextColor="#999"
+              multiline={true}
+              autoFocus={true}
+              onBlur={() => setFocused(false)}
+              onSelectionChange={(event) =>
+                onSelectionChange(event.nativeEvent.selection)
+              }
+              style={[
+                styles.inputBody,
+                {
+                  height: height - 220,
+                  borderColor: "rgba(0, 0, 0, 0)",
+                  outline: "none",
+                },
+              ]}
+              value={text}
+              onChangeText={onChangeText}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <TouchableOpacity
+          style={[
+            styles.inputBody,
+            {
+              height: height - 220,
+            },
+          ]}
+          onPress={() => setFocused(true)}
+        >
+          <ScrollView
+            contentInsetAdjustmentBehavior="automatic"
+            style={{ height: "100%", width: "100%" }}
+          >
+            {text !== "" ? (
+              <Markdown
+                rules={{}}
+                style={{
+                  body: {
+                    width: "100%",
+                    overflow: "scroll",
+                  },
+                }}
+              >
+                {text}
+              </Markdown>
+            ) : (
+              <Text style={{ color: "#999", fontSize: 20 }}>
+                Start writing your document here (markdown supported)
+              </Text>
+            )}
+          </ScrollView>
+        </TouchableOpacity>
+      )}
+    </>
   );
 }
 
