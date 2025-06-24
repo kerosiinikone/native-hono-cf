@@ -28,8 +28,8 @@ type Actions = {
 const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
 
 export class TextDoc extends AbstractDoc {
-  readonly heading: CVar<string>;
-  readonly content: CVar<string>;
+  readonly heading: CVar<string>; // RichText?
+  readonly content: CVar<string>; // RichText?
 
   constructor(options?: DocOptions) {
     super(options);
