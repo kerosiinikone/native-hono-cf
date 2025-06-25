@@ -28,6 +28,7 @@ export class DocumentSession {
   };
   // Kept for logs since TextDoc cannot be used in this runtime environment
   private textDocBufferState: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  private canvasDocBufferState: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
   private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
@@ -54,10 +55,15 @@ export class DocumentSession {
       loadedState = initialD1State;
     }
     this.state = { elements: loadedState?.elements || [] };
-    // Load -> get the buffer from D1 and apply it to the textDocBufferState
+
     if (loadedState?.textDocLogBuffer) {
       this.textDocBufferState = base64ToUint8Array(
         loadedState.textDocLogBuffer
+      );
+    }
+    if (loadedState?.canvasDocLogBuffer) {
+      this.canvasDocBufferState = base64ToUint8Array(
+        loadedState.canvasDocLogBuffer
       );
     }
     // _.merge()
@@ -119,7 +125,10 @@ export class DocumentSession {
             JSON.stringify({
               type: MessageType.STATE,
               command: MessageCommand.ADD,
-              payload: this.state.elements,
+              payload:
+                this.canvasDocBufferState.length > 0
+                  ? uint8ArrayToBase64(this.canvasDocBufferState)
+                  : undefined,
             })
           );
           ws.send(
@@ -157,62 +166,35 @@ export class DocumentSession {
           break;
         case MessageType.STATE:
           const stateUpdate = wsMessageValidation.data as StateUpdateMessage;
-          if (!stateUpdate || typeof stateUpdate === "string") {
+          if (!stateUpdate) {
             console.warn(
               "[DocumentSession] Received STATE update without state."
             );
             this.state = Object.assign(this.state, stateUpdate);
           }
           switch (command) {
-            case MessageCommand.DELETE:
-              const stateDelete =
-                wsMessageValidation.data as StateUpdateMessage;
-              (
-                stateDelete.payload as { elementIds: string[] }
-              ).elementIds.forEach((did) => {
-                this.state.elements = this.state.elements.filter(
-                  (element) => element.id !== did
-                );
-              });
-              break;
+            // case MessageCommand.DELETE:
+            //   const stateDelete =
+            //     wsMessageValidation.data as StateUpdateMessage;
+            //   (
+            //     stateDelete.payload as { elementIds: string[] }
+            //   ).elementIds.forEach((did) => {
+            //     this.state.elements = this.state.elements.filter(
+            //       (element) => element.id !== did
+            //     );
+            //   });
+            //   break;
             case MessageCommand.UPDATE:
-              const updatePayload = (stateUpdate as StateUpdateMessage)
-                .payload as Element;
-              const elementIdToUpdate = updatePayload.id;
-              if (
-                !this.state.elements.some((el) => el.id === elementIdToUpdate)
-              ) {
-                console.warn(
-                  `[DocumentSession] Element with ID '${elementIdToUpdate}' not found. No update performed.`
-                );
-                return;
-              }
-              let found = false;
-              this.state.elements = this.state.elements.map((element) => {
-                if (element.id === elementIdToUpdate) {
-                  found = true;
-                  return {
-                    ...element,
-                    properties: {
-                      ...element.properties,
-                      ...updatePayload.properties,
-                    },
-                  };
-                }
-                return element;
-              });
-              if (!found) {
-                console.warn(
-                  `[DocumentSession] Element with ID '${elementIdToUpdate}' not found. No update performed on elements array.`
-                );
-              }
+              const updatePayload = stateUpdate.payload;
+              const bytes = base64ToUint8Array(updatePayload);
+              this.canvasDocBufferState = this.mergeTextDocMessages(bytes);
               break;
-            case MessageCommand.ADD:
-              const state = (stateUpdate as StateUpdateMessage).payload;
-              this.state.elements = this.state.elements.concat(
-                [state as Element | Element[]].flat()
-              );
-              break;
+            // case MessageCommand.ADD:
+            //   const state = (stateUpdate as StateUpdateMessage).payload;
+            //   this.state.elements = this.state.elements.concat(
+            //     [state as Element | Element[]].flat()
+            //   );
+            //   break;
             default:
               console.warn(
                 "[DocumentSession] Unknown method for STATE update:",

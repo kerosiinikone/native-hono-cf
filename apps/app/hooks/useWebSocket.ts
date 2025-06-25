@@ -15,12 +15,16 @@ interface UseWebSocketOptions {
 // performance issues when there are many messa
 // and path elements
 
+// TODO: Centralize the buffering logic here!
+
 export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
   const queuedWSMessages = useRef<WSMessage[]>([]);
+
   const receiveRemoteMessage = useDocumentStore(
     (state) => state.receiveRemoteMessage
   );
+
   const sendBufferIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const sendBufferedMessages = useCallback(() => {
@@ -110,18 +114,18 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
     };
   }, [documentId]);
 
-  const bufferMessage = useCallback(
-    (msg: WSMessage) => {
-      if (sendBufferIntervalRef.current == null) {
-        sendBufferIntervalRef.current = setInterval(
-          sendBufferedMessages,
-          BUFFER_INTERVAL
-        );
-      }
-      queuedWSMessages.current.push(msg);
-    },
-    [documentId]
-  );
+  // const bufferMessage = useCallback(
+  //   (msg: WSMessage) => {
+  //     if (sendBufferIntervalRef.current == null) {
+  //       sendBufferIntervalRef.current = setInterval(
+  //         sendBufferedMessages,
+  //         BUFFER_INTERVAL
+  //       );
+  //     }
+  //     queuedWSMessages.current.push(msg);
+  //   },
+  //   [documentId]
+  // );
 
   const sendWithoutBuffer = useCallback(
     (msg: WSMessage) => {
@@ -131,16 +135,12 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
         } catch (e) {
           console.error("Error sending message without buffer:", e, msg);
         }
-      } else {
-        console.warn("WebSocket is not open, buffering message instead.");
-        bufferMessage(msg);
       }
     },
-    [documentId, bufferMessage]
+    [documentId]
   );
 
   return {
-    bufferMessage,
     sendWithoutBuffer,
   };
 }

@@ -2,7 +2,7 @@ import { ClientObject, withSkia_useCanvasStore } from "@/state/with-skia";
 import { copyMatrix } from "@/utils/matrix";
 import { Matrix4, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
-import { makeMutable, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 export default function useCircle() {
@@ -27,11 +27,9 @@ export default function useCircle() {
       focalY: y,
       width: radius * 2,
       height: radius * 2,
-      matrix: makeMutable(
-        multiply4(
-          copyMatrix(matrix.value),
-          translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
-        )
+      matrix: multiply4(
+        copyMatrix(matrix.value),
+        translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
       ),
       stretchable: false,
     }),

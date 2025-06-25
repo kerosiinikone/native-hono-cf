@@ -1,24 +1,12 @@
 import useCircle from "@/features/hooks/shapes/useCircle";
 import useRect from "@/features/hooks/shapes/useRect";
-import { ClientElement, useDocumentStore } from "@/state/document";
-import {
-  ElementType,
-  MessageCommand,
-  StateMessageCommands,
-} from "@native-hono-cf/shared";
+import { CanvasDoc } from "@/state/c_canvas";
+import { useCollab } from "@collabs/react";
+import { ElementType } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
-interface ToolbarProps {
-  sendLocalState: <T extends ClientElement>(
-    type: StateMessageCommands,
-    payload: T
-  ) => void;
-}
-
-export default function Toolbar({ sendLocalState }: ToolbarProps) {
-  const { removeElement, elements, addElement } = useDocumentStore(
-    (state) => state
-  );
+export default function Toolbar({ doc }: { doc: CanvasDoc }) {
+  useCollab(doc.elements);
 
   const { createRectPath } = useRect();
   const { createCirclePath } = useCircle();
@@ -27,28 +15,16 @@ export default function Toolbar({ sendLocalState }: ToolbarProps) {
     // TODO: Only pop the updates that the client has made itself
     // -> for example, in SETUP, send a client id and only pop the updates
     // that are from the client itself (by looping through the elements and checking)
-
-    if (!elements.length) return;
-    const lastElement = removeElement(
-      (elements[elements.length - 1] as ClientElement).id
-    );
-    if (!lastElement) return;
-
-    sendLocalState(MessageCommand.DELETE, lastElement);
+    const len = doc.elements.length;
+    if (!len) return;
+    doc.removeElement(doc.elements.get(len - 1));
   };
 
-  // Here or in the useRect hook?
   const addRectPathToStore = () =>
-    sendLocalState(
-      MessageCommand.ADD,
-      addElement(createRectPath(), ElementType.Rect)
-    );
+    doc.addElement({ ...createRectPath(), type: ElementType.Rect });
 
   const addRCirclePathToStore = () =>
-    sendLocalState(
-      MessageCommand.ADD,
-      addElement(createCirclePath(), ElementType.Circle)
-    );
+    doc.addElement({ ...createCirclePath(), type: ElementType.Circle });
 
   return (
     <View style={styles.container}>

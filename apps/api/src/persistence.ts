@@ -2,6 +2,7 @@ import { DocumentState } from "@native-hono-cf/shared";
 
 export type DocumentObjectModel = DocumentState & {
   textDocLogBuffer?: string;
+  canvasDocLogBuffer?: string;
 };
 
 export interface DocumentStorage {

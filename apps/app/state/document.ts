@@ -1,4 +1,4 @@
-import { AbstractDoc, CVar, DocOptions } from "@collabs/collabs";
+import { AbstractDoc, CVar, DocOptions, mergeMessages } from "@collabs/collabs";
 import {
   base64ToUint8Array,
   DrawingMode,
@@ -10,26 +10,23 @@ import { create } from "zustand";
 type State = {
   documentId: string | null;
   drawingMode: DrawingMode;
-  globalCanvasMessageQueue: WSMessage[];
   uncommitedChanges: Uint8Array<ArrayBufferLike>;
+  uncommitedCanvasChanges: Uint8Array<ArrayBufferLike>;
 };
 
 type Actions = {
   setDocumentId: (id: string | null) => void;
   setDrawingMode: (mode: DrawingMode) => void;
-  pushMessageToQueue: (message: WSMessage) => void;
-  popMessageFromCanvasQueue: () => WSMessage | undefined;
   receiveRemoteMessage: (message: WSMessage) => void;
   bindStore: (instance: TextDoc) => void;
-
-  flushState: () => void;
+  setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => void;
 };
 
 const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
 
 export class TextDoc extends AbstractDoc {
-  readonly heading: CVar<string>; // RichText?
-  readonly content: CVar<string>; // RichText?
+  readonly heading: CVar<string>; // -> RichText?
+  readonly content: CVar<string>; // -> RichText?
 
   constructor(options?: DocOptions) {
     super(options);
@@ -60,10 +57,13 @@ export const useDocumentStore = create<
 >((set, get) => ({
   documentId: TEST_DOCUMENT_ID,
   drawingMode: "draw",
-  globalTextMessageQueue: [],
-  globalCanvasMessageQueue: [],
   doc: null,
   uncommitedChanges: new Uint8Array(),
+  uncommitedCanvasChanges: new Uint8Array(),
+
+  setDocumentId: (id) => set({ documentId: id }),
+
+  setDrawingMode: (mode) => set({ drawingMode: mode }),
 
   bindStore: (instance: TextDoc) => {
     const uncommitedChanges = get().uncommitedChanges;
@@ -72,35 +72,31 @@ export const useDocumentStore = create<
     }
     set({ doc: instance });
   },
+
   receiveRemoteMessage: (message) => {
+    if (!message.payload) return;
+    const base64 = message.payload as string;
+    const buff = base64ToUint8Array(base64);
+    if (buff.length === 0) return;
+
     switch (message.type) {
       case MessageType.TEXT_STATE:
         const doc = get().doc;
-        if (!message.payload) return;
-        const base64 = message.payload;
-        const buff = base64ToUint8Array(base64);
-        if (buff.length === 0) return;
         if (doc) doc.receive(buff);
         else get().uncommitedChanges = buff;
         break;
-      default:
-        get().pushMessageToQueue(message);
+      case MessageType.STATE:
+        const uncommitedCanvasChanges = get().uncommitedCanvasChanges;
+        if (uncommitedCanvasChanges.length > 0)
+          get().setUncommitedCanvasChanges(
+            mergeMessages([uncommitedCanvasChanges, buff])
+          );
+        else get().setUncommitedCanvasChanges(buff);
         break;
     }
   },
-  pushMessageToQueue: (message) => {
-    const { globalCanvasMessageQueue } = get();
-    set({
-      globalCanvasMessageQueue: [...globalCanvasMessageQueue, message],
-    });
-  },
-  popMessageFromCanvasQueue: () => get().globalCanvasMessageQueue.pop(),
 
-  setDocumentId: (id) => set({ documentId: id }),
-  setDrawingMode: (mode) => set({ drawingMode: mode }),
-  flushState: () => {
-    set({
-      drawingMode: "draw",
-    });
+  setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => {
+    set({ uncommitedCanvasChanges: changes });
   },
 }));

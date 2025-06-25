@@ -1,77 +1,70 @@
+import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
+import { withSkia_useCanvasStore } from "@/state/with-skia";
 import {
-  ClientElement,
-  transformClientObjectToServer,
-  withSkia_useCanvasStore,
-} from "@/state/with-skia";
-import {
+  base64ToUint8Array,
   DocumentStateUpdate,
   MessageCommand,
   MessageType,
-  StateMessageCommands,
+  uint8ArrayToBase64,
   WSMessage,
 } from "@native-hono-cf/shared";
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
-import Toolbar from "../ui/CanvasToolbar";
+import Toolbar from "../ui/Toolbar";
 import SkiaCn from "./SkiaCn";
 
 interface CanvasScreenProps {
   switchView: () => void;
-  bufferMessage: (message: WSMessage) => void;
+  sendWithoutBuffer: (message: WSMessage) => void;
 }
 
 export default function CanvasScreen({
   switchView,
-  bufferMessage,
+  sendWithoutBuffer,
 }: CanvasScreenProps) {
-  const { documentId, globalCanvasMessageQueue, popMessageFromCanvasQueue } =
+  const { documentId, uncommitedCanvasChanges, setUncommitedCanvasChanges } =
     useDocumentStore((state) => state);
-  const { setLocalFromServerState } = withSkia_useCanvasStore((state) => state);
-
-  // Leave and abstract this to the store to handle the state updates?
-  const handleStateReceive = useCallback(
-    (msg: WSMessage) => {
-      const { command, payload } = msg as WSMessage;
-      setLocalFromServerState(payload as DocumentStateUpdate, command);
-    },
-    [documentId]
-  );
-
-  const sendLocalState = useCallback(
-    <T extends ClientElement>(type: StateMessageCommands, payload: T) => {
-      if (!documentId) return;
-      bufferMessage({
-        type: MessageType.STATE,
-        command: type,
-        payload:
-          type !== MessageCommand.DELETE
-            ? transformClientObjectToServer(payload)
-            : { elementIds: [payload.id] },
-      });
-    },
-    [documentId, bufferMessage]
-  );
+  const { bindStore, doc } = withSkia_useCanvasStore((state) => state);
 
   useEffect(() => {
-    // TODO: Applies all the UPDATEs for the same element in the wrong order
-    for (let i = globalCanvasMessageQueue.length - 1; i >= 0; i--) {
-      const message = globalCanvasMessageQueue[i];
-      if (!message || !message.payload) continue;
-      if (message.type === MessageType.TEXT_STATE) continue;
+    if (!documentId) return;
+    const doc = new CanvasDoc();
+    bindStore(doc, (instance: CanvasDoc) => {
+      // Flush the uncommited changes -> has to be done here
+      if (uncommitedCanvasChanges.length > 0) {
+        instance.receive(uncommitedCanvasChanges);
+        setUncommitedCanvasChanges(new Uint8Array());
+      }
+    });
+    // This has to be bound here since it uses the WS hook function
+    doc.on("Send", (e) => {
+      // if (isThrottling.current) return;
+      sendWithoutBuffer({
+        type: MessageType.STATE,
+        command: MessageCommand.UPDATE,
+        payload: uint8ArrayToBase64(e.message),
+      });
+    });
+    // setLoaded(true);
+  }, [documentId]);
 
-      handleStateReceive(message);
-      popMessageFromCanvasQueue();
+  // EventEmitter?
+  useEffect(() => {
+    if (!doc) return;
+    if (uncommitedCanvasChanges.length > 0) {
+      doc.receive(uncommitedCanvasChanges);
+      setUncommitedCanvasChanges(new Uint8Array());
     }
-  }, [globalCanvasMessageQueue, popMessageFromCanvasQueue, handleStateReceive]);
+  }, [uncommitedCanvasChanges, doc]);
 
   return (
     <GestureHandlerRootView style={gStyles.container}>
-      <SkiaCn sendLocalState={sendLocalState} />
+      {doc && <SkiaCn doc={doc} />}
       <CanvasPointerMode switchView={switchView} />
-      <Toolbar sendLocalState={sendLocalState} />
+      {doc && <Toolbar doc={doc} />}
     </GestureHandlerRootView>
   );
 }

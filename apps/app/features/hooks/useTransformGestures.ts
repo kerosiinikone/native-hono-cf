@@ -1,3 +1,4 @@
+import { CElement } from "@/state/c_canvas";
 import { withSkia_useCanvasStore } from "@/state/with-skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
@@ -14,15 +15,15 @@ enum DragDirection {
 }
 
 interface TransformGesturesProps {
+  element: CElement;
   matrix: SharedValue<Matrix4>;
-  focalX: number;
-  stretchable: boolean;
-  width: number;
-  id: string;
-  height: number;
   x: number;
   y: number;
+  focalX: number;
   focalY: number;
+  width: number;
+  height: number;
+  stretchable: boolean;
   updatePath: (params: Matrix4) => void;
 }
 
@@ -42,20 +43,16 @@ export function multiply(...matrices: Matrix4[]) {
 
 export default function useTransformGestures({
   updatePath,
+  element,
   matrix,
-  width,
   x,
   y,
-  height,
-  id,
   focalX,
-  stretchable,
   focalY,
+  width,
+  height,
+  stretchable,
 }: TransformGesturesProps): SimultaneousGesture {
-  const { editRectWidth, editRectHeight } = withSkia_useCanvasStore(
-    (state) => state
-  );
-
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
   const clock = useSharedValue(0);
@@ -64,18 +61,18 @@ export default function useTransformGestures({
 
   const performWidthUpdate = (args: any) => {
     if (!args) return;
-    editRectWidth(args.id, Math.max(MIN_WIDTH, args.newWidth), args.x);
+    element.editRectWidth(Math.max(MIN_WIDTH, args.newWidth), args.x);
   };
 
   const performHeightUpdate = (args: any) => {
     if (!args) return;
-    editRectHeight(args.id, Math.max(MIN_HEIGHT, args.newHeight), args.y);
+    element.editRectHeight(Math.max(MIN_HEIGHT, args.newHeight), args.y);
   };
 
   const updateOnEnd = useCallback(() => {
     "worklet";
     updatePath(matrix.value);
-  }, [savedMatrix, matrix, updatePath]);
+  }, [matrix, updatePath]);
 
   const pan = Gesture.Pan()
     .averageTouches(true)
@@ -114,7 +111,6 @@ export default function useTransformGestures({
         case DragDirection.RIGHT:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performWidthUpdate({
-              id,
               newWidth: width + e.changeX * SPEED_FACTOR,
             });
           }
@@ -122,7 +118,6 @@ export default function useTransformGestures({
         case DragDirection.LEFT:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performWidthUpdate({
-              id,
               newWidth: width - e.changeX * SPEED_FACTOR,
               x: x + e.changeX * SPEED_FACTOR,
             });
@@ -131,7 +126,6 @@ export default function useTransformGestures({
         case DragDirection.UP:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performHeightUpdate({
-              id,
               newHeight: height - e.changeY * SPEED_FACTOR,
               y: y + e.changeY * SPEED_FACTOR,
             });
@@ -140,7 +134,6 @@ export default function useTransformGestures({
         case DragDirection.DOWN:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performHeightUpdate({
-              id,
               newHeight: height + e.changeY * SPEED_FACTOR,
             });
           }
@@ -166,8 +159,8 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x: focalX,
-        y: focalY,
+        x,
+        y,
       };
       savedMatrix.value = matrix.value;
     })
@@ -185,8 +178,8 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x: focalX,
-        y: focalY,
+        x,
+        y,
       };
       savedMatrix.value = matrix.value;
     })

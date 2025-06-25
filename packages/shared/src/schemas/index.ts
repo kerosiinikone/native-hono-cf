@@ -12,6 +12,7 @@ export const documentStateSchema = z.object({
   properties: z.record(z.any()),
 });
 
+// Clean this up later
 export const canvasWebSocketMessageSchema = z.object({
   type: z.enum(["setup", "state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
@@ -24,6 +25,7 @@ export const canvasWebSocketMessageSchema = z.object({
       z.object({
         elementIds: z.array(z.string()),
       }),
+      z.string(), // For text state messages
     ])
     .optional(),
 });

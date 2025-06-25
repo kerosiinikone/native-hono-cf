@@ -1,6 +1,7 @@
 import useTransformGestures, {
   multiply,
 } from "@/features/hooks/useTransformGestures";
+import { CElement } from "@/state/c_canvas";
 import { ElementType } from "@native-hono-cf/shared";
 import {
   convertToAffineMatrix,
@@ -16,18 +17,17 @@ import Animated, {
 import { translate } from "react-native-redash";
 
 interface SelectPathProps {
-  matrix: SharedValue<Matrix4>;
   canvasMatrix: SharedValue<Matrix4>;
+  elementRef: CElement;
   x: number;
   y: number;
   focalX: number;
-  id: string;
-  pathType: ElementType;
   focalY: number;
   stretchable: boolean;
   width: number;
+  matrix: SharedValue<Matrix4>;
+  type: ElementType;
   height: number;
-
   updatePath: (params: Matrix4) => void;
 }
 
@@ -47,7 +47,6 @@ function computeFinalTransformMatrix(
     finalMatrix,
     translate(localCenterX, localCenterY, 0)
   );
-
   const finalTransformMatrixForStyle = convertToColumnMajor(transformMatrix);
   return convertToAffineMatrix(finalTransformMatrixForStyle);
 }
@@ -57,36 +56,36 @@ function isCircle(type: ElementType): boolean {
 }
 
 export default function SelectPath({
-  matrix,
+  elementRef,
+  canvasMatrix,
   x,
   y,
-  stretchable,
-  width,
-  focalX,
-  pathType,
-  focalY,
-  id,
+  type,
+  matrix,
   height,
-  canvasMatrix,
+  stretchable,
+  focalX,
+  focalY,
+  width,
   updatePath,
 }: SelectPathProps) {
   const gesture = useTransformGestures({
-    updatePath, // useCallback?
-    matrix,
-    focalX,
-    width,
+    updatePath,
+    element: elementRef,
     x,
     y,
-    id,
+    matrix,
     height,
-    stretchable,
+    focalX,
     focalY,
+    stretchable,
+    width,
   });
 
   const style = useAnimatedStyle(() => ({
     ...trivStyles.path,
-    left: x - (isCircle(pathType) ? width / 2 : 0),
-    top: y - (isCircle(pathType) ? height / 2 : 0),
+    left: x - (isCircle(type) ? width / 2 : 0),
+    top: y - (isCircle(type) ? height / 2 : 0),
     width,
     height,
     transform: [

@@ -1,27 +1,22 @@
 import useCanvasPanGesture from "@/features/hooks/useCanvasPanGesture";
 import useDrawingGesture from "@/features/hooks/useDrawingGesture";
+import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
-import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
+import { withSkia_useCanvasStore } from "@/state/with-skia";
+import { useCollab } from "@collabs/react";
 import { Canvas, Group, Matrix4, Path } from "@shopify/react-native-skia";
 import { StyleSheet } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useDerivedValue } from "react-native-reanimated";
 import SelectPath from "./SelectPath";
-import { ClientElement, withSkia_useCanvasStore } from "@/state/with-skia";
 
-interface SkiaCnProps {
-  sendLocalState: <T extends ClientElement>(
-    type: StateMessageCommands,
-    payload: T
-  ) => void;
-}
+export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
+  useCollab(doc.elements);
 
-export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
   const drawingMode = useDocumentStore((state) => state.drawingMode);
-  const { canvasMatrix, elements, updateElementMatrix } =
-    withSkia_useCanvasStore((state) => state);
+  const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
 
-  const { drawingGesture, currentPath } = useDrawingGesture({ sendLocalState });
+  const { drawingGesture, currentPath } = useDrawingGesture(doc);
   const canvasPanGesture = useCanvasPanGesture();
 
   const transform = useDerivedValue(() => {
@@ -35,11 +30,11 @@ export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
       <GestureDetector gesture={gesture}>
         <Canvas style={cnStyles.canvas}>
           <Group transform={transform}>
-            {elements.map((el, i) => (
+            {doc?.elements.map((el, i) => (
               <Path
                 key={i}
-                path={el.properties.path}
-                matrix={el.properties.matrix}
+                path={el.path.value}
+                matrix={el.matrix.value}
                 style="stroke"
                 strokeWidth={5}
                 strokeCap="round"
@@ -57,18 +52,24 @@ export default function SkiaCn({ sendLocalState }: SkiaCnProps) {
         </Canvas>
       </GestureDetector>
       {drawingMode === "select" &&
-        elements.map((el, i) => (
+        // These has to be calculated as props, not through the ref for some weird reason!
+        doc.elements.map((el, i) => (
           <SelectPath
             key={i}
-            pathType={el.type}
-            id={el.id}
-            {...el.properties}
+            x={el.posX()}
+            y={el.posY()}
+            width={el.elementWidth()}
+            height={el.elementHeight()}
+            type={el.type.value}
+            matrix={el.matrix.value}
+            stretchable={el.stretchable.value}
+            focalX={el.focX()}
+            focalY={el.focY()}
+            elementRef={el} // TODO: Can also be bound to the rect updates?
             canvasMatrix={canvasMatrix}
-            updatePath={(params: Matrix4) => {
-              const upEl = updateElementMatrix(el.id, params);
-              if (!upEl) return;
-              sendLocalState(MessageCommand.UPDATE, upEl);
-            }}
+            updatePath={(params: Matrix4) =>
+              doc.updateElementMatrix(el, params)
+            }
           />
         ))}
     </>

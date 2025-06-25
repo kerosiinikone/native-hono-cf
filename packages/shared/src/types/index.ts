@@ -56,12 +56,14 @@ export interface TextDocumentStateUpdate {
   textEnd?: number;
 }
 
-export type DocumentStateUpdate =
-  | Readonly<Element>
-  | ReadonlyArray<Readonly<Element>>
-  | Readonly<{
-      elementIds: string[];
-    }>;
+// export type DocumentStateUpdate =
+//   | Readonly<Element>
+//   | ReadonlyArray<Readonly<Element>>
+//   | Readonly<{
+//       elementIds: string[];
+//     }>;
+
+export type DocumentStateUpdate = Readonly<string>;
 
 export interface BaseElementProperties {
   x: number;

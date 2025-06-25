@@ -26,9 +26,12 @@ interface ElementProperties {
   matrix: Matrix4;
 }
 
+// TODO
+class Matrix4Serializer {}
+class SkPathSerializer {}
+
 export class CanvasDoc extends AbstractDoc {
   readonly elements: CList<CElement, []>;
-  readonly canvasMatrix: CVar<Matrix4>;
 
   constructor(options?: DocOptions) {
     super(options);
@@ -36,10 +39,6 @@ export class CanvasDoc extends AbstractDoc {
     this.elements = this.runtime.registerCollab(
       "elements",
       (init) => new CList(init, (valueInit) => new CElement(valueInit))
-    );
-    this.canvasMatrix = this.runtime.registerCollab(
-      "canvasMatrix",
-      (init) => new CVar(init, Matrix4())
     );
   }
 
@@ -71,7 +70,7 @@ export class CanvasDoc extends AbstractDoc {
 export class CElement extends CObject {
   // Make the rest of these private?
   readonly type: CVar<ElementType>;
-  readonly path: CVar<SkPath>; // SharedValue<SkPath> here or in the state?
+  readonly path: CVar<SkPath>;
   readonly matrix: CVar<SharedValue<Matrix4>>;
   readonly stretchable: CVar<boolean>;
   private readonly x: CVar<number>;
@@ -90,7 +89,56 @@ export class CElement extends CObject {
     );
     this.path = super.registerCollab(
       "path",
-      (init) => new CVar(init, Skia.Path.Make())
+      (init) =>
+        new CVar(init, Skia.Path.Make(), {
+          valueSerializer: {
+            deserialize(message) {
+              return (
+                Skia.Path.MakeFromSVGString(
+                  new TextDecoder().decode(message)
+                ) || Skia.Path.Make()
+              );
+            },
+            serialize(value) {
+              return new Uint8Array(
+                new TextEncoder().encode(value.toSVGString())
+              );
+            },
+          },
+        })
+    );
+    this.matrix = super.registerCollab(
+      "matrix",
+      (init) =>
+        new CVar(init, makeMutable(Matrix4()), {
+          valueSerializer: {
+            deserialize(message) {
+              if (message.length !== 64) {
+                throw new Error(
+                  "Invalid Uint8Array length for a Matrix4. Expected 64 bytes."
+                );
+              }
+              const alignedMessage = message.slice();
+              const float32Array = new Float32Array(
+                alignedMessage.buffer,
+                alignedMessage.byteOffset,
+                16
+              );
+              return makeMutable(
+                Array.from(float32Array)
+              ) as unknown as SharedValue<Matrix4>;
+            },
+            serialize(value) {
+              if (value.value.length !== 16) {
+                throw new Error(
+                  "Input array must have 16 elements to represent a Matrix4."
+                );
+              }
+              const float32Array = new Float32Array(value.value);
+              return new Uint8Array(float32Array.buffer);
+            },
+          },
+        })
     );
     this.x = super.registerCollab("x", (init) => new CVar(init, 0));
     this.y = super.registerCollab("y", (init) => new CVar(init, 0));
@@ -98,10 +146,6 @@ export class CElement extends CObject {
     this.focalY = super.registerCollab("focalY", (init) => new CVar(init, 0));
     this.width = super.registerCollab("width", (init) => new CVar(init, 0));
     this.height = super.registerCollab("height", (init) => new CVar(init, 0));
-    this.matrix = super.registerCollab(
-      "matrix",
-      (init) => new CVar(init, makeMutable(Matrix4()))
-    );
     this.stretchable = super.registerCollab(
       "stretchable",
       (init) => new CVar(init, this._isRect())
@@ -174,6 +218,7 @@ export class CElement extends CObject {
     this.setFocalPoint(this.posX() + newWidth / 2, this.focY());
     this.setSize(newWidth, this.elementHeight());
   }
+
   editRectHeight(newHeight: number, shiftY: number = 0): void {
     if (!this._isRect()) return;
     if (newHeight < 50) {

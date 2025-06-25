@@ -1,9 +1,6 @@
-import {
-  ClientElement,
-  ClientObject,
-  withSkia_useCanvasStore,
-} from "@/state/with-skia";
-import { MessageCommand, StateMessageCommands } from "@native-hono-cf/shared";
+import { CanvasDoc } from "@/state/c_canvas";
+import { ClientObject, withSkia_useCanvasStore } from "@/state/with-skia";
+import { ElementType } from "@native-hono-cf/shared";
 import {
   Matrix4,
   notifyChange,
@@ -11,19 +8,8 @@ import {
   SkPath,
 } from "@shopify/react-native-skia";
 import { Gesture, PanGesture } from "react-native-gesture-handler";
-import {
-  makeMutable,
-  SharedValue,
-  useSharedValue,
-} from "react-native-reanimated";
+import { SharedValue, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
-
-interface DrawingGestureProps {
-  sendLocalState: <T extends ClientElement>(
-    type: StateMessageCommands,
-    payload: T
-  ) => void;
-}
 
 const MIN_DIMENSION_SIZE = 50;
 const DIMENSION_ADJUSTMENT = 20;
@@ -63,13 +49,10 @@ function generateNewPath(
   const focalX = x + width / 2;
   const focalY = y + height / 2;
 
-  const transformedMatrix = makeMutable(
-    multiply4(
-      matrix.value,
-      translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
-    )
+  const transformedMatrix = multiply4(
+    matrix.value,
+    translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
   );
-
   return {
     path: currentPath.value.copy(),
     x,
@@ -78,20 +61,16 @@ function generateNewPath(
     focalY,
     width,
     height,
-    matrix: transformedMatrix,
+    matrix: transformedMatrix, // Regular matrix, not mutable
     stretchable: false,
   };
 }
 
-export default function useDrawingGesture({
-  sendLocalState,
-}: DrawingGestureProps): {
+export default function useDrawingGesture(doc: CanvasDoc): {
   drawingGesture: PanGesture;
   currentPath: SharedValue<SkPath>;
 } {
-  const { canvasMatrix, addElement } = withSkia_useCanvasStore(
-    (state) => state
-  );
+  const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
 
   const path = Skia.Path.Make();
   const currentPath = useSharedValue(path);
@@ -149,7 +128,8 @@ export default function useDrawingGesture({
         canvasMatrix
       );
 
-      sendLocalState(MessageCommand.ADD, addElement(newPath));
+      // Alter the DOC to include the new path element
+      doc.addElement({ ...newPath, type: ElementType.Path });
       resetCanvasVariables();
     });
 

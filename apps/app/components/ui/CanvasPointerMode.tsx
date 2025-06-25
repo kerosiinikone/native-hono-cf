@@ -3,15 +3,10 @@ import { useCallback } from "react";
 import { Button, StyleSheet, View } from "react-native";
 
 export function CanvasPointerMode({ switchView }: { switchView: () => void }) {
-  const { setDrawingMode, drawingMode, flushState } = useDocumentStore(
-    (state) => state
-  );
-
-  // Flush??
+  const { setDrawingMode, drawingMode } = useDocumentStore((state) => state);
   const handleSwitchView = useCallback(() => {
-    flushState();
     switchView();
-  }, [flushState, switchView]);
+  }, [switchView]);
 
   return (
     <View style={styles.container}>
