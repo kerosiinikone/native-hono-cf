@@ -72,7 +72,7 @@ export default function useTransformGestures({
   const updateOnEnd = useCallback(() => {
     "worklet";
     updatePath(matrix.value);
-  }, [matrix, updatePath]);
+  }, [matrix, updatePath, savedMatrix]);
 
   const pan = Gesture.Pan()
     .averageTouches(true)
@@ -159,8 +159,8 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x,
-        y,
+        x: focalX,
+        y: focalY,
       };
       savedMatrix.value = matrix.value;
     })
@@ -178,8 +178,8 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x,
-        y,
+        x: focalX,
+        y: focalY,
       };
       savedMatrix.value = matrix.value;
     })

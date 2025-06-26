@@ -3,8 +3,10 @@ import {
   CList,
   CObject,
   CVar,
+  DefaultSerializer,
   DocOptions,
   InitToken,
+  Serializer,
 } from "@collabs/collabs";
 import { ElementType } from "@native-hono-cf/shared";
 import { Matrix4, rect, Skia, SkPath } from "@shopify/react-native-skia";
@@ -26,9 +28,45 @@ interface ElementProperties {
   matrix: Matrix4;
 }
 
-// TODO
-class Matrix4Serializer {}
-class SkPathSerializer {}
+class Matrix4Serializer implements Serializer<SharedValue<Matrix4>> {
+  deserialize(message: Uint8Array): SharedValue<Matrix4> {
+    if (message.length !== 64) {
+      throw new Error(
+        "Invalid Uint8Array length for a Matrix4. Expected 64 bytes."
+      );
+    }
+    const alignedMessage = message.slice();
+    const float32Array = new Float32Array(
+      alignedMessage.buffer,
+      alignedMessage.byteOffset,
+      16
+    );
+    return makeMutable(
+      Array.from(float32Array)
+    ) as unknown as SharedValue<Matrix4>;
+  }
+  serialize(value: SharedValue<Matrix4>): Uint8Array {
+    if (value.value.length !== 16) {
+      throw new Error(
+        "Input array must have 16 elements to represent a Matrix4."
+      );
+    }
+    const float32Array = new Float32Array(value.value);
+    return new Uint8Array(float32Array.buffer);
+  }
+}
+
+class SkPathSerializer implements Serializer<SkPath> {
+  deserialize(message: Uint8Array): SkPath {
+    return (
+      Skia.Path.MakeFromSVGString(new TextDecoder().decode(message)) ||
+      Skia.Path.Make()
+    );
+  }
+  serialize(value: SkPath): Uint8Array {
+    return new Uint8Array(new TextEncoder().encode(value.toSVGString()));
+  }
+}
 
 export class CanvasDoc extends AbstractDoc {
   readonly elements: CList<CElement, []>;
@@ -91,53 +129,14 @@ export class CElement extends CObject {
       "path",
       (init) =>
         new CVar(init, Skia.Path.Make(), {
-          valueSerializer: {
-            deserialize(message) {
-              return (
-                Skia.Path.MakeFromSVGString(
-                  new TextDecoder().decode(message)
-                ) || Skia.Path.Make()
-              );
-            },
-            serialize(value) {
-              return new Uint8Array(
-                new TextEncoder().encode(value.toSVGString())
-              );
-            },
-          },
+          valueSerializer: new SkPathSerializer(),
         })
     );
     this.matrix = super.registerCollab(
       "matrix",
       (init) =>
         new CVar(init, makeMutable(Matrix4()), {
-          valueSerializer: {
-            deserialize(message) {
-              if (message.length !== 64) {
-                throw new Error(
-                  "Invalid Uint8Array length for a Matrix4. Expected 64 bytes."
-                );
-              }
-              const alignedMessage = message.slice();
-              const float32Array = new Float32Array(
-                alignedMessage.buffer,
-                alignedMessage.byteOffset,
-                16
-              );
-              return makeMutable(
-                Array.from(float32Array)
-              ) as unknown as SharedValue<Matrix4>;
-            },
-            serialize(value) {
-              if (value.value.length !== 16) {
-                throw new Error(
-                  "Input array must have 16 elements to represent a Matrix4."
-                );
-              }
-              const float32Array = new Float32Array(value.value);
-              return new Uint8Array(float32Array.buffer);
-            },
-          },
+          valueSerializer: new Matrix4Serializer(),
         })
     );
     this.x = super.registerCollab("x", (init) => new CVar(init, 0));

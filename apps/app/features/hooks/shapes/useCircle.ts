@@ -16,11 +16,11 @@ export default function useCircle() {
   const y = height / 2;
 
   const r = Skia.Path.Make();
-  const sharedCirc = useSharedValue(r.addCircle(x, y, radius));
+  const sharedCirc = r.addCircle(x, y, radius);
 
   return {
     createCirclePath: (): ClientObject => ({
-      path: sharedCirc.value.copy(),
+      path: sharedCirc.copy(),
       x,
       y,
       focalX: x,

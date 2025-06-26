@@ -17,11 +17,11 @@ export default function useRect() {
   const y = height / 2 - rHeight / 2;
 
   const r = Skia.Path.Make();
-  const sharedRect = useSharedValue(r.addRect(rect(x, y, rWidth, rHeight)));
+  const sharedRect = r.addRect(rect(x, y, rWidth, rHeight));
 
   return {
     createRectPath: (): ClientObject => ({
-      path: sharedRect.value.copy(),
+      path: sharedRect.copy(),
       x,
       y,
       focalX: x + rWidth / 2,
