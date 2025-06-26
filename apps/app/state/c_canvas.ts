@@ -3,7 +3,6 @@ import {
   CList,
   CObject,
   CVar,
-  DefaultSerializer,
   DocOptions,
   InitToken,
   Serializer,
@@ -41,6 +40,7 @@ class Matrix4Serializer implements Serializer<SharedValue<Matrix4>> {
       alignedMessage.byteOffset,
       16
     );
+    // Forced
     return makeMutable(
       Array.from(float32Array)
     ) as unknown as SharedValue<Matrix4>;
@@ -60,7 +60,7 @@ class SkPathSerializer implements Serializer<SkPath> {
   deserialize(message: Uint8Array): SkPath {
     return (
       Skia.Path.MakeFromSVGString(new TextDecoder().decode(message)) ||
-      Skia.Path.Make()
+      Skia.Path.Make() // For now
     );
   }
   serialize(value: SkPath): Uint8Array {
@@ -106,7 +106,7 @@ export class CanvasDoc extends AbstractDoc {
 
 // Split into CPathProperties and CElement?
 export class CElement extends CObject {
-  // Make the rest of these private?
+  // TODO: Make the rest of these private?
   readonly type: CVar<ElementType>;
   readonly path: CVar<SkPath>;
   readonly matrix: CVar<SharedValue<Matrix4>>;

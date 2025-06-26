@@ -9,17 +9,20 @@ import {
   uint8ArrayToBase64,
   WSMessage,
 } from "@native-hono-cf/shared";
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
 import Toolbar from "../ui/Toolbar";
 import SkiaCn from "./SkiaCn";
+import { mergeMessages } from "@collabs/collabs";
 
 interface CanvasScreenProps {
   switchView: () => void;
   sendWithoutBuffer: (message: WSMessage) => void;
 }
+
+const THROTTLE_DELAY = 300;
 
 export default function CanvasScreen({
   switchView,
@@ -31,22 +34,50 @@ export default function CanvasScreen({
     (state) => state
   );
 
+  const isThrottling = useRef<boolean>(false);
+  const changeBuffer = useRef<Uint8Array | null>(null); // Buffer for changes before sending
+
+  const throttleTransaction = useCallback(() => {
+    const batchedActions = changeBuffer.current;
+    changeBuffer.current = null;
+    if (!batchedActions || batchedActions.length === 0) {
+      isThrottling.current = false;
+      return;
+    }
+    // This doesn't defer the update itself but the sync operation
+    sendWithoutBuffer({
+      type: MessageType.STATE,
+      command: MessageCommand.UPDATE,
+      payload: uint8ArrayToBase64(batchedActions),
+    });
+    isThrottling.current = false;
+  }, [doc]);
+
   useEffect(() => {
     if (!documentId) return;
     const canvasDoc = new CanvasDoc();
     bindStore(canvasDoc);
     // Trigger a rerender
     setUncommitedCanvasChanges(uncommitedCanvasChanges);
-    // This has to be bound here since it uses the WS hook function
+    // This is the place where either we send the "buffered" changes or
+    // accumulate them (by merging) until a given throttle delay has passed
     canvasDoc.on("Send", (e) => {
-      // if (isThrottling.current) return;
-      sendWithoutBuffer({
-        type: MessageType.STATE,
-        command: MessageCommand.UPDATE,
-        payload: uint8ArrayToBase64(e.message),
-      });
+      changeBuffer.current = mergeMessages(
+        (!changeBuffer.current || changeBuffer.current.length === 0
+          ? []
+          : [changeBuffer.current]
+        ).concat([e.message])
+      );
+
+      if (isThrottling.current) return;
+
+      setTimeout(() => {
+        throttleTransaction();
+      }, THROTTLE_DELAY);
+
+      // Send buffer was here!
+      isThrottling.current = true;
     });
-    // setLoaded(true);
     return () => {
       // Save for unmount
       setSavedState(canvasDoc.save());

@@ -158,21 +158,19 @@ export default function DocumentScreen({
 }: DocumentScreenProps) {
   const { documentId, doc, bindStore } = useDocumentStore((state) => state);
 
-  const [optimisticHeading, setOptimisticHeading] = useState("");
-  const [optimisticContent, setOptimisticContent] = useState("");
+  const [optimisticHeading, setOptimisticHeading] = useState<string>("");
+  const [optimisticContent, setOptimisticContent] = useState<string>("");
 
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded] = useState<boolean>(false);
 
-  const isThrottling = useRef(false);
-  const crdtActionBuffer = useRef<
+  const actionBuffer = useRef<
     { content: string; type: "heading" | "content" }[]
   >([]);
 
   const throttleTransaction = useCallback(() => {
-    const batchedActions = crdtActionBuffer.current;
-    crdtActionBuffer.current = [];
+    const batchedActions = actionBuffer.current;
+    actionBuffer.current = [];
     if (batchedActions.length === 0) {
-      isThrottling.current = false;
       return;
     }
     doc!.transact(() => {
@@ -185,7 +183,6 @@ export default function DocumentScreen({
         }
       }
     });
-    isThrottling.current = false;
   }, [doc]);
 
   useEffect(() => {
@@ -195,7 +192,6 @@ export default function DocumentScreen({
 
     // This has to be bound here since it uses the WS hook function
     doc.on("Send", (e) => {
-      if (isThrottling.current) return;
       sendWithoutBuffer({
         type: MessageType.TEXT_STATE,
         command: MessageCommand.UPDATE,
@@ -213,14 +209,10 @@ export default function DocumentScreen({
       const currentHeading = optimisticHeading.concat(newText);
       setOptimisticHeading(currentHeading);
 
-      crdtActionBuffer.current.push({
+      actionBuffer.current.push({
         content: currentHeading,
         type: "heading",
       });
-
-      if (isThrottling.current) {
-        return;
-      }
       setTimeout(() => {
         throttleTransaction();
         setOptimisticHeading("");
@@ -237,14 +229,10 @@ export default function DocumentScreen({
       const currentContent = optimisticContent.concat(newText);
       setOptimisticContent(currentContent);
 
-      crdtActionBuffer.current.push({
+      actionBuffer.current.push({
         content: currentContent,
         type: "content",
       });
-
-      if (isThrottling.current) {
-        return;
-      }
       setTimeout(() => {
         throttleTransaction();
         setOptimisticContent("");
