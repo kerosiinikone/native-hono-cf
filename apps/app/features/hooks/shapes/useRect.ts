@@ -1,4 +1,4 @@
-import { ClientObject, withSkia_useCanvasStore } from "@/state/with-skia";
+import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
 import { copyMatrix } from "@/utils/matrix";
 import { Matrix4, rect, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";

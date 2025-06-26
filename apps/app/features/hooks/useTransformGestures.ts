@@ -1,5 +1,5 @@
 import { CElement } from "@/state/c_canvas";
-import { withSkia_useCanvasStore } from "@/state/with-skia";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";

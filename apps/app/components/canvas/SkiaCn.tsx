@@ -2,7 +2,7 @@ import useCanvasPanGesture from "@/features/hooks/useCanvasPanGesture";
 import useDrawingGesture from "@/features/hooks/useDrawingGesture";
 import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
-import { withSkia_useCanvasStore } from "@/state/with-skia";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { useCollab } from "@collabs/react";
 import { Canvas, Group, Matrix4, Path } from "@shopify/react-native-skia";
 import { StyleSheet } from "react-native";

@@ -1,6 +1,6 @@
 import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
-import { withSkia_useCanvasStore } from "@/state/with-skia";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import {
   base64ToUint8Array,
   DocumentStateUpdate,
@@ -27,20 +27,18 @@ export default function CanvasScreen({
 }: CanvasScreenProps) {
   const { documentId, uncommitedCanvasChanges, setUncommitedCanvasChanges } =
     useDocumentStore((state) => state);
-  const { bindStore, doc } = withSkia_useCanvasStore((state) => state);
+  const { bindStore, doc, setSavedState, savedState } = withSkia_useCanvasStore(
+    (state) => state
+  );
 
   useEffect(() => {
     if (!documentId) return;
-    const doc = new CanvasDoc();
-    bindStore(doc, (instance: CanvasDoc) => {
-      // Flush the uncommited changes -> has to be done here
-      if (uncommitedCanvasChanges.length > 0) {
-        instance.receive(uncommitedCanvasChanges);
-        setUncommitedCanvasChanges(new Uint8Array());
-      }
-    });
+    const canvasDoc = new CanvasDoc();
+    bindStore(canvasDoc);
+    // Trigger a rerender
+    setUncommitedCanvasChanges(uncommitedCanvasChanges);
     // This has to be bound here since it uses the WS hook function
-    doc.on("Send", (e) => {
+    canvasDoc.on("Send", (e) => {
       // if (isThrottling.current) return;
       sendWithoutBuffer({
         type: MessageType.STATE,
@@ -49,12 +47,16 @@ export default function CanvasScreen({
       });
     });
     // setLoaded(true);
+    return () => {
+      // Save for unmount
+      setSavedState(canvasDoc.save());
+    };
   }, [documentId]);
 
   // EventEmitter?
   useEffect(() => {
     if (!doc) return;
-    if (uncommitedCanvasChanges.length > 0) {
+    if (uncommitedCanvasChanges.length > 0 && savedState.length === 0) {
       doc.receive(uncommitedCanvasChanges);
       setUncommitedCanvasChanges(new Uint8Array());
     }

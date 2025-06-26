@@ -18,11 +18,14 @@ export type ClientObject = {
 };
 
 type State = {
+  // Wrapper for accessing and modifying the underlying matrix?
   canvasMatrix: SharedValue<Matrix4>;
+  savedState: Uint8Array;
 };
 
 type Actions = {
-  bindStore: (instance: CanvasDoc, f: (instance: CanvasDoc) => void) => void;
+  bindStore: (instance: CanvasDoc) => void;
+  setSavedState: (state: Uint8Array) => void;
 };
 
 export const withSkia_useCanvasStore = create<
@@ -30,13 +33,20 @@ export const withSkia_useCanvasStore = create<
     Actions & {
       doc: CanvasDoc | null;
     }
->((set) => ({
+>((set, get) => ({
   doc: null,
+  savedState: new Uint8Array(),
   uncommitedChanges: new Uint8Array(),
   canvasMatrix: makeMutable(Matrix4()),
 
-  bindStore: (instance: CanvasDoc, f: (instance: CanvasDoc) => void) => {
+  bindStore: (instance: CanvasDoc) => {
+    const { savedState, setSavedState } = get();
     set({ doc: instance });
-    f(instance);
+    if (savedState.length > 0) {
+      instance.load(savedState);
+      setSavedState(new Uint8Array());
+    }
   },
+
+  setSavedState: (state: Uint8Array) => set({ savedState: state }),
 }));
