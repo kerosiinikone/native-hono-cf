@@ -245,3 +245,7 @@ export class CElement extends CObject {
     return this.type.value === ElementType.Rect;
   }
 }
+
+export class CPathElement extends CElement {}
+export class CCircleElement extends CElement {}
+export class CRectElement extends CElement {}

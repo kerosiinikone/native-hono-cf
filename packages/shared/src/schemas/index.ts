@@ -5,38 +5,44 @@ export const documentSchema = z.object({
   id: z.string().optional(),
 });
 
-// TODO: instead of z.record(z.any()), make sure to define the properties of the elements (path, shape, etc.)
-export const documentStateSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  properties: z.record(z.any()),
+export const base64Uint8ArrayString = z.string().refine((value) => {
+  try {
+    const decoded = atob(value);
+    return new Uint8Array(decoded.length).every(
+      (_, i) => decoded.charCodeAt(i) >= 0
+    );
+  } catch {
+    return false;
+  }
 });
 
-// Clean this up later
+// TODO: lean this up later -> nore stricter type checking
+// Etc. -> MessageType.SETUP -> command has to be MessageCommand.INFO and payload is null!
 export const canvasWebSocketMessageSchema = z.object({
   type: z.enum(["setup", "state", "error"]),
-  command: z.enum(["update", "delete", "add", "info"]),
+  command: z.enum(["update", "delete", "add", "info", "snapshot"]),
   payload: z
     .union([
       z.object({
         message: z.string(),
       }),
-      z.union([z.array(documentStateSchema), documentStateSchema]),
-      z.object({
-        elementIds: z.array(z.string()),
-      }),
-      z.string(), // For text state messages
+      base64Uint8ArrayString, // For state updates
     ])
     .optional(),
 });
-
-// TODO: z.intersection([]) -> for heading-type messages and text-type messages (seaprate them)
 
 export const textWebSocketMessageSchema = z.object({
   type: z.enum(["text_state", "error"]),
   command: z.enum(["update", "delete", "add", "info"]),
   // Uint8Array -> base64 string
-  payload: z.string(),
+  payload: z
+    .union([
+      z.object({
+        message: z.string(),
+      }),
+      base64Uint8ArrayString, // For state updates
+    ])
+    .optional(),
 });
 
 export const webSocketMessageSchema = z.union([
@@ -44,7 +50,5 @@ export const webSocketMessageSchema = z.union([
   textWebSocketMessageSchema,
 ]);
 
-export type TextMessageSchema = z.infer<typeof textWebSocketMessageSchema>;
 export type DocumentSchema = z.infer<typeof documentSchema>;
-export type DocumentStateSchema = z.infer<typeof documentStateSchema>;
 export type WebSocketMessageSchema = z.infer<typeof webSocketMessageSchema>;

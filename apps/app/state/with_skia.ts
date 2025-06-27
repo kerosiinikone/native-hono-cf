@@ -34,6 +34,8 @@ export const withSkia_useCanvasStore = create<
       doc: CanvasDoc | null;
     }
 >((set, get) => ({
+  // Might not be necessary to have this in the store
+  // -> passed as a ref
   doc: null,
   savedState: new Uint8Array(),
   uncommitedChanges: new Uint8Array(),
@@ -48,5 +50,6 @@ export const withSkia_useCanvasStore = create<
     }
   },
 
+  // TODO: Remove or make work
   setSavedState: (state: Uint8Array) => set({ savedState: state }),
 }));

@@ -1,12 +1,11 @@
+import { mergeMessages } from "@collabs/collabs";
 import {
   base64ToUint8Array,
   DocumentState,
-  Element,
   ErrorMessage,
   MessageCommand,
   MessageType,
   StateUpdateMessage,
-  TextDocumentState,
   uint8ArrayToBase64,
   webSocketMessageSchema,
   WebSocketMessageSchema,
@@ -18,17 +17,13 @@ import {
   DocumentStorage,
 } from "./persistence";
 import { debounce } from "./util";
-import { mergeMessages } from "@collabs/collabs";
 
 const DEBOUNCE = 5000;
 
 export class DocumentSession {
-  public state: DocumentState = {
-    elements: [],
-  };
-  // Kept for logs since TextDoc cannot be used in this runtime environment
+  // Kept for state since Collabs docs cannot be used in this runtime environment
   private textDocBufferState: Uint8Array<ArrayBufferLike> = new Uint8Array();
-  private canvasDocBufferState: Uint8Array<ArrayBufferLike> = new Uint8Array();
+  private latestCanvasSnapshot: Uint8Array<ArrayBufferLike> = new Uint8Array();
 
   private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
@@ -54,28 +49,34 @@ export class DocumentSession {
     if (!loadedState && initialD1State) {
       loadedState = initialD1State;
     }
-    this.state = { elements: loadedState?.elements || [] };
 
     if (loadedState?.textDocLogBuffer) {
-      this.textDocBufferState = base64ToUint8Array(
-        loadedState.textDocLogBuffer
-      );
+      const bytes = base64ToUint8Array(loadedState.textDocLogBuffer);
+      this.textDocBufferState =
+        bytes.length > 0 ? bytes : this.textDocBufferState;
     }
-    if (loadedState?.canvasDocLogBuffer) {
-      this.canvasDocBufferState = base64ToUint8Array(
-        loadedState.canvasDocLogBuffer
-      );
+    if (loadedState?.latestCanvasSnapshot) {
+      const bytes = base64ToUint8Array(loadedState.latestCanvasSnapshot);
+      this.latestCanvasSnapshot =
+        bytes.length > 0 ? bytes : this.latestCanvasSnapshot;
     }
-    // _.merge()
-    await this.durableObjectStorage._putState(this.state);
+
+    // Necessary???
+    await this.durableObjectStorage._putState({
+      textDocLogBuffer:
+        this.textDocBufferState.length > 0
+          ? uint8ArrayToBase64(this.textDocBufferState)
+          : undefined,
+      latestCanvasSnapshot:
+        this.latestCanvasSnapshot.length > 0
+          ? uint8ArrayToBase64(this.latestCanvasSnapshot)
+          : undefined,
+    });
   }
 
   addClient(ws: WebSocket): string {
     const clientId = crypto.randomUUID();
     this.clientMap.set(ws, clientId);
-    console.log(
-      `[DocumentSession] Client ${clientId} connected. Total clients: ${this.clientMap.size}`
-    );
     return clientId;
   }
 
@@ -83,9 +84,6 @@ export class DocumentSession {
     const clientId = this.clientMap.get(ws);
     if (clientId) {
       this.clientMap.delete(ws);
-      console.log(
-        `[DocumentSession] Client ${clientId} disconnected. Total clients: ${this.clientMap.size}`
-      );
     }
   }
 
@@ -95,15 +93,14 @@ export class DocumentSession {
 
     try {
       const parsedMessage = JSON.parse(message as string);
-
       const wsMessageValidation =
         webSocketMessageSchema.safeParse(parsedMessage);
-
       if (!wsMessageValidation.success) {
         console.error(
-          "[DocumentSession] Invalid message schema:",
+          "Invalid message schema:",
           wsMessageValidation.error.flatten()
         );
+        // Error msg wrapper util?
         ws.send(
           JSON.stringify({
             type: MessageType.ERROR,
@@ -115,26 +112,30 @@ export class DocumentSession {
         );
         return;
       }
-
       const { type, command } =
         wsMessageValidation.data as WebSocketMessageSchema;
 
+      // TEXT_STATE can keep merging the messages -> simple serialization
+      // Canvas UPDATEs can only be boradcasted, unless the client sends a
+      // MessageType.SNAPSHOT command
       switch (type) {
         case MessageType.SETUP:
+          // TODO: USE A SNAPSHOT OF THE CURRENT STATE ->
+          // request doc.save() from one of the existing clients!
           ws.send(
             JSON.stringify({
-              type: MessageType.STATE,
-              command: MessageCommand.ADD,
+              type: MessageType.SETUP,
+              command: MessageCommand.SNAPSHOT,
               payload:
-                this.canvasDocBufferState.length > 0
-                  ? uint8ArrayToBase64(this.canvasDocBufferState)
+                this.latestCanvasSnapshot.length > 0
+                  ? uint8ArrayToBase64(this.latestCanvasSnapshot)
                   : undefined,
             })
           );
           ws.send(
             JSON.stringify({
               type: MessageType.TEXT_STATE,
-              command: MessageCommand.ADD,
+              command: MessageCommand.UPDATE,
               payload:
                 this.textDocBufferState.length > 0
                   ? uint8ArrayToBase64(this.textDocBufferState)
@@ -145,17 +146,10 @@ export class DocumentSession {
         case MessageType.TEXT_STATE:
           switch (command) {
             case MessageCommand.UPDATE:
-              // The server should have a TextDoc of its own
-              // It is loaded from the D1 database and sent
-              // to the client initially
-              //
-              // On each update it is updated and
-              // therefore also "holds the truth"
-              // for subsequent new clients that connect!
               const buffer = (wsMessageValidation.data as WSMessage)
                 .payload as string;
               const bytes = base64ToUint8Array(buffer);
-              this.textDocBufferState = this.mergeTextDocMessages(bytes);
+              this.textDocBufferState = this.mergeDocMessages(bytes);
               break;
             default:
               console.warn("Illegal command for TEXT_STATE:", command);
@@ -165,42 +159,22 @@ export class DocumentSession {
           this.persistState();
           break;
         case MessageType.STATE:
-          const stateUpdate = wsMessageValidation.data as StateUpdateMessage;
-          if (!stateUpdate) {
-            console.warn(
-              "[DocumentSession] Received STATE update without state."
-            );
-            this.state = Object.assign(this.state, stateUpdate);
-          }
+          const messageData = wsMessageValidation.data as StateUpdateMessage;
           switch (command) {
-            // case MessageCommand.DELETE:
-            //   const stateDelete =
-            //     wsMessageValidation.data as StateUpdateMessage;
-            //   (
-            //     stateDelete.payload as { elementIds: string[] }
-            //   ).elementIds.forEach((did) => {
-            //     this.state.elements = this.state.elements.filter(
-            //       (element) => element.id !== did
-            //     );
-            //   });
-            //   break;
             case MessageCommand.UPDATE:
-              const updatePayload = stateUpdate.payload;
-              const bytes = base64ToUint8Array(updatePayload);
-              this.canvasDocBufferState = this.mergeTextDocMessages(bytes);
+              // Between clients
+              this.broadcast(message as string, this.clientMap.get(ws));
               break;
-            // case MessageCommand.ADD:
-            //   const state = (stateUpdate as StateUpdateMessage).payload;
-            //   this.state.elements = this.state.elements.concat(
-            //     [state as Element | Element[]].flat()
-            //   );
-            //   break;
-            default:
-              console.warn(
-                "[DocumentSession] Unknown method for STATE update:",
-                command
+            case MessageCommand.SNAPSHOT:
+              // Validate the payload?
+              // TODO: Check the version numbers of the saved state?
+              // -> use senderCounter!!!
+              this.latestCanvasSnapshot = base64ToUint8Array(
+                messageData.payload
               );
-              // TODO: separate functions for each command?
+              this.persistState();
+              break;
+            default:
               ws.send(
                 JSON.stringify({
                   type: MessageType.ERROR,
@@ -212,12 +186,8 @@ export class DocumentSession {
               );
               return;
           }
-
-          this.broadcast(message as string, this.clientMap.get(ws));
-          this.persistState();
           break;
         default:
-          console.warn(`[DocumentSession] Misc: ${type}`);
           ws.send(
             JSON.stringify({
               type: MessageType.ERROR,
@@ -242,11 +212,11 @@ export class DocumentSession {
     }
   }
 
-  private mergeTextDocMessages(
+  private mergeDocMessages(
     messages: Uint8Array<ArrayBufferLike>
   ): Uint8Array<ArrayBufferLike> {
-    if (messages.length === 0) return this.textDocBufferState;
-    if (this.textDocBufferState.length === 0) return messages;
+    if (!this.textDocBufferState.length) return messages;
+    if (!messages.length) return this.textDocBufferState;
     return mergeMessages([this.textDocBufferState, messages]);
   }
 
@@ -267,33 +237,51 @@ export class DocumentSession {
     });
   }
 
+  // Refactor these
   private async _persistToD1Now(): Promise<void> {
     if (this.d1Persistence) {
       await this.d1Persistence.persistState({
-        ...this.state,
-        textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
+        textDocLogBuffer:
+          this.textDocBufferState.length > 0
+            ? uint8ArrayToBase64(this.textDocBufferState)
+            : undefined,
+        latestCanvasSnapshot:
+          this.latestCanvasSnapshot.length > 0
+            ? uint8ArrayToBase64(this.latestCanvasSnapshot)
+            : undefined,
       });
     }
   }
 
+  // Refactor these
   async persistState(): Promise<void> {
     await this.durableObjectStorage._putState({
-      ...this.state,
-      textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
+      textDocLogBuffer:
+        this.textDocBufferState.length > 0
+          ? uint8ArrayToBase64(this.textDocBufferState)
+          : undefined,
+      latestCanvasSnapshot:
+        this.latestCanvasSnapshot.length > 0
+          ? uint8ArrayToBase64(this.latestCanvasSnapshot)
+          : undefined,
     });
     if (this.d1Persistence) {
       this.debouncedPersistToD1();
     }
   }
 
+  // Refactor these
   async flush(): Promise<void> {
     if (this.d1Persistence) {
-      console.log(
-        `[DocumentSession] Flushing state to D1 immediately for document...`
-      );
       await this.d1Persistence.persistState({
-        ...this.state,
-        textDocLogBuffer: uint8ArrayToBase64(this.textDocBufferState),
+        textDocLogBuffer:
+          this.textDocBufferState.length > 0
+            ? uint8ArrayToBase64(this.textDocBufferState)
+            : undefined,
+        latestCanvasSnapshot:
+          this.latestCanvasSnapshot.length > 0
+            ? uint8ArrayToBase64(this.latestCanvasSnapshot)
+            : undefined,
       });
     }
   }

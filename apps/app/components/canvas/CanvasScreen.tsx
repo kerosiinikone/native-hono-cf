@@ -1,9 +1,8 @@
 import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
+import { mergeMessages } from "@collabs/collabs";
 import {
-  base64ToUint8Array,
-  DocumentStateUpdate,
   MessageCommand,
   MessageType,
   uint8ArrayToBase64,
@@ -15,7 +14,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
 import Toolbar from "../ui/Toolbar";
 import SkiaCn from "./SkiaCn";
-import { mergeMessages } from "@collabs/collabs";
 
 interface CanvasScreenProps {
   switchView: () => void;
@@ -28,14 +26,20 @@ export default function CanvasScreen({
   switchView,
   sendWithoutBuffer,
 }: CanvasScreenProps) {
-  const { documentId, uncommitedCanvasChanges, setUncommitedCanvasChanges } =
-    useDocumentStore((state) => state);
-  const { bindStore, doc, setSavedState, savedState } = withSkia_useCanvasStore(
+  const {
+    documentId,
+    uncommitedCanvasChanges,
+    setUncommitedCanvasChanges,
+    savedCanvasState,
+  } = useDocumentStore((state) => state);
+  const { bindStore, setSavedState } = withSkia_useCanvasStore(
     (state) => state
   );
+  const canvasRef = useRef<CanvasDoc | null>(null);
 
   const isThrottling = useRef<boolean>(false);
   const changeBuffer = useRef<Uint8Array | null>(null); // Buffer for changes before sending
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const throttleTransaction = useCallback(() => {
     const batchedActions = changeBuffer.current;
@@ -50,12 +54,15 @@ export default function CanvasScreen({
       command: MessageCommand.UPDATE,
       payload: uint8ArrayToBase64(batchedActions),
     });
+
     isThrottling.current = false;
-  }, [doc]);
+  }, [canvasRef.current, sendWithoutBuffer]);
 
   useEffect(() => {
     if (!documentId) return;
     const canvasDoc = new CanvasDoc();
+    canvasRef.current = canvasDoc;
+    // Bind the store to the canvas document -> is this even necessary?
     bindStore(canvasDoc);
     // Trigger a rerender
     setUncommitedCanvasChanges(uncommitedCanvasChanges);
@@ -71,33 +78,58 @@ export default function CanvasScreen({
 
       if (isThrottling.current) return;
 
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         throttleTransaction();
       }, THROTTLE_DELAY);
 
       // Send buffer was here!
       isThrottling.current = true;
     });
+
     return () => {
-      // Save for unmount
-      setSavedState(canvasDoc.save());
+      // Save for unmount -> send a MessageType.SNAPSHOT to the server!
+      // Also periodically save the state and send it to the server!
+      //
+      // useSendSnapshot hook? -> intervals on useEffect?
+      //
+      // Save and send the senderCounter as well!!!! -> verify latest state
+      const save = canvasDoc.save();
+      if (!save.length) return;
+      // TODO: Don't send if no changes have been made
+      sendWithoutBuffer({
+        type: MessageType.STATE,
+        command: MessageCommand.SNAPSHOT,
+        payload: uint8ArrayToBase64(save),
+      });
+      setSavedState(save);
+      clearTimeout(timeoutRef.current!);
     };
   }, [documentId]);
 
+  // Merge these hooks?
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    if (savedCanvasState.length > 0) {
+      canvasRef.current.load(savedCanvasState);
+    }
+  }, [savedCanvasState, canvasRef.current]);
+
   // EventEmitter?
   useEffect(() => {
-    if (!doc) return;
-    if (uncommitedCanvasChanges.length > 0 && savedState.length === 0) {
-      doc.receive(uncommitedCanvasChanges);
+    if (!canvasRef.current) return;
+    // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
+    // This should in turn load the "merged" state from the server (not a complete state snapshot as it probably should be....)
+    if (uncommitedCanvasChanges.length > 0) {
+      canvasRef.current.receive(uncommitedCanvasChanges);
       setUncommitedCanvasChanges(new Uint8Array());
     }
-  }, [uncommitedCanvasChanges, doc]);
+  }, [uncommitedCanvasChanges, canvasRef.current]);
 
   return (
     <GestureHandlerRootView style={gStyles.container}>
-      {doc && <SkiaCn doc={doc} />}
+      {canvasRef.current && <SkiaCn doc={canvasRef.current} />}
       <CanvasPointerMode switchView={switchView} />
-      {doc && <Toolbar doc={doc} />}
+      {canvasRef.current && <Toolbar doc={canvasRef.current} />}
     </GestureHandlerRootView>
   );
 }

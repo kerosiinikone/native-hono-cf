@@ -2,6 +2,7 @@ import { AbstractDoc, CVar, DocOptions, mergeMessages } from "@collabs/collabs";
 import {
   base64ToUint8Array,
   DrawingMode,
+  MessageCommand,
   MessageType,
   WSMessage,
 } from "@native-hono-cf/shared";
@@ -12,6 +13,7 @@ type State = {
   drawingMode: DrawingMode;
   uncommitedChanges: Uint8Array<ArrayBufferLike>;
   uncommitedCanvasChanges: Uint8Array<ArrayBufferLike>;
+  savedCanvasState: Uint8Array<ArrayBufferLike>;
 };
 
 type Actions = {
@@ -20,6 +22,7 @@ type Actions = {
   receiveRemoteMessage: (message: WSMessage) => void;
   bindStore: (instance: TextDoc) => void;
   setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => void;
+  setSavedCanvasState: (state: Uint8Array<ArrayBufferLike>) => void;
 };
 
 const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
@@ -60,6 +63,7 @@ export const useDocumentStore = create<
   doc: null,
   uncommitedChanges: new Uint8Array(),
   uncommitedCanvasChanges: new Uint8Array(),
+  savedCanvasState: new Uint8Array(),
 
   setDocumentId: (id) => set({ documentId: id }),
 
@@ -79,21 +83,38 @@ export const useDocumentStore = create<
     const buff = base64ToUint8Array(base64);
     if (buff.length === 0) return;
 
+    const {
+      uncommitedCanvasChanges,
+      setUncommitedCanvasChanges,
+      setSavedCanvasState,
+    } = get();
+
     switch (message.type) {
       case MessageType.TEXT_STATE:
-        const doc = get().doc;
+        const { doc } = get();
         if (doc) doc.receive(buff);
         else get().uncommitedChanges = buff;
         break;
       case MessageType.STATE:
-        const uncommitedCanvasChanges = get().uncommitedCanvasChanges;
         if (uncommitedCanvasChanges.length > 0)
-          get().setUncommitedCanvasChanges(
+          // Could go wrong (matrix serialization doesn't go well with the mergeMessages)
+          // -> maybe just a queue?
+          setUncommitedCanvasChanges(
             mergeMessages([uncommitedCanvasChanges, buff])
           );
-        else get().setUncommitedCanvasChanges(buff);
+        else setUncommitedCanvasChanges(buff);
         break;
+      case MessageType.SETUP:
+        switch (message.command) {
+          case MessageCommand.SNAPSHOT:
+            setSavedCanvasState(buff);
+            break;
+        }
     }
+  },
+
+  setSavedCanvasState: (state: Uint8Array<ArrayBufferLike>) => {
+    set({ savedCanvasState: state });
   },
 
   setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => {

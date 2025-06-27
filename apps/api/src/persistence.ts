@@ -1,8 +1,7 @@
-import { DocumentState } from "@native-hono-cf/shared";
-
-export type DocumentObjectModel = DocumentState & {
+// TODO: Make this coherent!
+export type DocumentObjectModel = {
   textDocLogBuffer?: string;
-  canvasDocLogBuffer?: string;
+  latestCanvasSnapshot?: string;
 };
 
 export interface DocumentStorage {
@@ -38,7 +37,6 @@ export class D1Persistence {
 
   async loadState(): Promise<DocumentObjectModel | null> {
     if (!this.documentId) {
-      console.error("[D1Persistence] No document ID provided for loadState.");
       return null;
     }
     try {
@@ -51,25 +49,12 @@ export class D1Persistence {
         ? (JSON.parse(row.state) as DocumentObjectModel)
         : null;
     } catch (err) {
-      console.error(
-        `[D1Persistence] Error loading state for ${this.documentId}:`,
-        err
-      );
       return null;
     }
   }
 
   async persistState(state: DocumentObjectModel): Promise<void> {
     if (!this.documentId) {
-      console.error(
-        "[D1Persistence] No document ID provided for persistState."
-      );
-      return;
-    }
-    if (!state.elements?.length) {
-      console.warn(
-        `[D1Persistence] No state elements to persist for ${this.documentId}`
-      );
       return;
     }
     try {
@@ -79,11 +64,6 @@ export class D1Persistence {
         )
         .bind(this.documentId, JSON.stringify(state), JSON.stringify(state))
         .run();
-    } catch (err) {
-      console.error(
-        `[D1Persistence] Error persisting state for ${this.documentId}:`,
-        err
-      );
-    }
+    } catch (err) {}
   }
 }

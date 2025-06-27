@@ -162,6 +162,7 @@ export default function DocumentScreen({
   const [optimisticContent, setOptimisticContent] = useState<string>("");
 
   const [loaded, setLoaded] = useState<boolean>(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const actionBuffer = useRef<
     { content: string; type: "heading" | "content" }[]
@@ -200,6 +201,12 @@ export default function DocumentScreen({
     });
 
     setLoaded(true);
+    return () => {
+      // TODO: Save state here?
+      //
+      // Cleanup the document store
+      clearTimeout(timeoutRef.current!);
+    };
   }, [documentId]);
 
   const handleLocalHeadingChange = useCallback(
@@ -213,7 +220,7 @@ export default function DocumentScreen({
         content: currentHeading,
         type: "heading",
       });
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
         throttleTransaction();
         setOptimisticHeading("");
       }, THROTTLE_DELAY);

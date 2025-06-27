@@ -14,6 +14,7 @@ export enum MessageType {
   SETUP = "setup",
   STATE = "state",
   ERROR = "error",
+  SNAPSHOT = "snapshot",
   PING = "ping",
   PONG = "pong",
   TEXT_STATE = "text_state",
@@ -22,46 +23,17 @@ export enum MessageType {
 export enum MessageCommand {
   UPDATE = "update",
   DELETE = "delete",
-  ADD = "add",
   INFO = "info",
+  SNAPSHOT = "snapshot",
 }
 
 export type StateMessageCommands =
-  | MessageCommand.ADD
   | MessageCommand.UPDATE
-  | MessageCommand.DELETE;
+  | MessageCommand.SNAPSHOT;
 
 export interface DocumentState {
   elements: Element[];
 }
-
-export type TextOperation = {
-  text?: string;
-  end?: number;
-  offset?: number;
-};
-
-export interface TextDocumentState {
-  heading: string;
-  text: string;
-}
-
-export interface TextDocumentStateUpdate {
-  heading?: string;
-  headingOffset?: number;
-  headingEnd?: number;
-
-  text?: string;
-  textOffset?: number;
-  textEnd?: number;
-}
-
-// export type DocumentStateUpdate =
-//   | Readonly<Element>
-//   | ReadonlyArray<Readonly<Element>>
-//   | Readonly<{
-//       elementIds: string[];
-//     }>;
 
 export type DocumentStateUpdate = Readonly<string>;
 
@@ -109,6 +81,18 @@ export interface SetupMessage {
   payload: null;
 }
 
+export interface SnapshotUpstream {
+  type: MessageType.STATE;
+  command: MessageCommand.SNAPSHOT;
+  payload: DocumentStateUpdate;
+}
+
+export interface SnapshotDownstream {
+  type: MessageType.SETUP;
+  command: MessageCommand.SNAPSHOT;
+  payload: DocumentStateUpdate;
+}
+
 export interface StateUpdateMessage {
   type: MessageType.STATE;
   command: StateMessageCommands;
@@ -126,12 +110,13 @@ export interface ErrorMessage {
 export interface TextPatchMessage {
   type: MessageType.TEXT_STATE;
   command: StateMessageCommands;
-  payload: string;
+  payload: DocumentStateUpdate;
 }
 
 export type WSMessage =
   | SetupMessage
   | StateUpdateMessage
   | ErrorMessage
-  | TextPatchMessage;
-// | CursorUpdateMessage
+  | TextPatchMessage
+  | SnapshotUpstream
+  | SnapshotDownstream;
