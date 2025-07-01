@@ -1,12 +1,12 @@
 import useCircle from "@/features/hooks/shapes/useCircle";
 import useRect from "@/features/hooks/shapes/useRect";
-import { CanvasDoc } from "@/state/c_canvas";
+import { CCanvas } from "@/state/c_canvas";
 import { useCollab } from "@collabs/react";
 import { ElementType } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
-export default function Toolbar({ doc }: { doc: CanvasDoc }) {
-  useCollab(doc.elements);
+export default function Toolbar({ doc }: { doc: CCanvas }) {
+  useCollab(doc);
 
   const { createRectPath } = useRect();
   const { createCirclePath } = useCircle();

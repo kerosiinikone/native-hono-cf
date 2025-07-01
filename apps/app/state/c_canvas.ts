@@ -14,7 +14,7 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 // AbstractDoc for element array (CanvasDoc) -> this is the state of the canvas,
 // Each element is a CObject (element) that can be transformed to/from server state
 
-interface ElementProperties {
+export interface ElementProperties {
   path: SkPath;
   type: ElementType;
   stretchable: boolean;
@@ -98,25 +98,24 @@ export class CanvasDoc extends AbstractDoc {
     }
   }
 
-  updateElementMatrix(el: CElement, newMatrix: Matrix4): CElement {
-    el.setMatrix(newMatrix);
-    return el;
-  }
+  // Keep element?
+  // Archive element?
+
+  // TODO: Transfer protocol util functions here (or make them into
+  // hooks of their own) !!!
 }
 
-// Split into CPathProperties and CElement?
 export class CElement extends CObject {
-  // TODO: Make the rest of these private?
   readonly type: CVar<ElementType>;
   readonly path: CVar<SkPath>;
   readonly matrix: CVar<SharedValue<Matrix4>>;
   readonly stretchable: CVar<boolean>;
-  private readonly x: CVar<number>;
-  private readonly y: CVar<number>;
-  private readonly focalX: CVar<number>;
-  private readonly focalY: CVar<number>;
-  private readonly width: CVar<number>;
-  private readonly height: CVar<number>;
+  readonly x: CVar<number>;
+  readonly y: CVar<number>;
+  readonly focalX: CVar<number>;
+  readonly focalY: CVar<number>;
+  readonly width: CVar<number>;
+  readonly height: CVar<number>;
 
   constructor(init: InitToken) {
     super(init);
@@ -150,6 +149,8 @@ export class CElement extends CObject {
       (init) => new CVar(init, this._isRect())
     );
   }
+
+  // TODO: Getters not needed
 
   posX(): number {
     return this.x.value;
@@ -231,6 +232,10 @@ export class CElement extends CObject {
     this.setPos(this.posX(), shiftY ?? this.posY());
     this.setFocalPoint(this.focX(), this.posY() + newHeight / 2);
     this.setSize(this.elementWidth(), newHeight);
+  }
+
+  isCircle(): boolean {
+    return this.type.value === ElementType.Circle;
   }
 
   private setWidth(width: number): void {

@@ -114,14 +114,11 @@ export class DocumentSession {
       }
       const { type, command } =
         wsMessageValidation.data as WebSocketMessageSchema;
-
       // TEXT_STATE can keep merging the messages -> simple serialization
       // Canvas UPDATEs can only be boradcasted, unless the client sends a
       // MessageType.SNAPSHOT command
       switch (type) {
         case MessageType.SETUP:
-          // TODO: USE A SNAPSHOT OF THE CURRENT STATE ->
-          // request doc.save() from one of the existing clients!
           ws.send(
             JSON.stringify({
               type: MessageType.SETUP,
@@ -226,10 +223,6 @@ export class DocumentSession {
         try {
           ws.send(msg);
         } catch (e) {
-          console.error(
-            `[DocumentSession] Error sending message to ${clientId}:`,
-            e
-          );
           this.removeClient(ws);
           ws.close(1000, "Client disconnected or error sending message.");
         }

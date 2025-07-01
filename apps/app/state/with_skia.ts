@@ -21,11 +21,13 @@ type State = {
   // Wrapper for accessing and modifying the underlying matrix?
   canvasMatrix: SharedValue<Matrix4>;
   savedState: Uint8Array;
+  hasChanged: boolean;
 };
 
 type Actions = {
   bindStore: (instance: CanvasDoc) => void;
   setSavedState: (state: Uint8Array) => void;
+  notifyLocalChange: () => void;
 };
 
 export const withSkia_useCanvasStore = create<
@@ -37,9 +39,18 @@ export const withSkia_useCanvasStore = create<
   // Might not be necessary to have this in the store
   // -> passed as a ref
   doc: null,
+  hasChanged: false,
   savedState: new Uint8Array(),
   uncommitedChanges: new Uint8Array(),
   canvasMatrix: makeMutable(Matrix4()),
+
+  // Naive
+  notifyLocalChange: () => {
+    const { doc, hasChanged } = get();
+    if (doc) {
+      set({ hasChanged: !hasChanged });
+    }
+  },
 
   bindStore: (instance: CanvasDoc) => {
     const { savedState, setSavedState } = get();

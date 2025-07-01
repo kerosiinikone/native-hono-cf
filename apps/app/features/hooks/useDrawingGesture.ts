@@ -1,4 +1,4 @@
-import { CanvasDoc } from "@/state/c_canvas";
+import { CanvasDoc, CCanvas } from "@/state/c_canvas";
 import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
 import { ElementType } from "@native-hono-cf/shared";
 import {
@@ -66,7 +66,7 @@ function generateNewPath(
   };
 }
 
-export default function useDrawingGesture(doc: CanvasDoc): {
+export default function useDrawingGesture(doc: CCanvas): {
   drawingGesture: PanGesture;
   currentPath: SharedValue<SkPath>;
 } {

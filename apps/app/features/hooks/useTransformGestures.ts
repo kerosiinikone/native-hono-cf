@@ -3,7 +3,7 @@ import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";
-import { SharedValue, useSharedValue } from "react-native-reanimated";
+import { useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 enum DragDirection {
@@ -14,18 +14,17 @@ enum DragDirection {
   DOWN = "down",
 }
 
-interface TransformGesturesProps {
-  element: CElement;
-  matrix: SharedValue<Matrix4>;
-  x: number;
-  y: number;
-  focalX: number;
-  focalY: number;
-  width: number;
-  height: number;
-  stretchable: boolean;
-  updatePath: (params: Matrix4) => void;
-}
+// interface TransformGesturesProps {
+//   element: CElement;
+//   // matrix: SharedValue<Matrix4>;
+//   // x: number;
+//   // y: number;
+//   // focalX: number;
+//   // focalY: number;
+//   // width: number;
+//   // height: number;
+//   // stretchable: boolean;
+// }
 
 // TODO: Optimize the resizing animation and
 // make more generic for future shapes !!!
@@ -41,38 +40,40 @@ export function multiply(...matrices: Matrix4[]) {
   return matrices.reduce((acc, matrix) => multiply4(acc, matrix), Matrix4());
 }
 
-export default function useTransformGestures({
-  updatePath,
-  element,
-  matrix,
-  x,
-  y,
-  focalX,
-  focalY,
-  width,
-  height,
-  stretchable,
-}: TransformGesturesProps): SimultaneousGesture {
+export default function useTransformGestures(
+  { element }: { element: CElement } // TransformGesturesProps
+): SimultaneousGesture {
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
   const clock = useSharedValue(0);
-
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
 
-  const performWidthUpdate = (args: any) => {
+  const notifyLocalChange = withSkia_useCanvasStore(
+    (state) => state.notifyLocalChange
+  );
+
+  const { x, y, focalX, focalY, width, height, stretchable, matrix } = element;
+
+  // Throttle these
+  const performWidthUpdate = (args: { newWidth: number; x?: number }) => {
     if (!args) return;
     element.editRectWidth(Math.max(MIN_WIDTH, args.newWidth), args.x);
+    notifyLocalChange();
   };
 
-  const performHeightUpdate = (args: any) => {
+  // Throttle these
+  const performHeightUpdate = (args: { newHeight: number; y?: number }) => {
     if (!args) return;
     element.editRectHeight(Math.max(MIN_HEIGHT, args.newHeight), args.y);
+    notifyLocalChange();
   };
 
+  // Throttle these
   const updateOnEnd = useCallback(() => {
     "worklet";
-    updatePath(matrix.value);
-  }, [matrix, updatePath, savedMatrix]);
+    element.setMatrix(matrix.value.value);
+    notifyLocalChange();
+  }, [matrix, element]);
 
   const pan = Gesture.Pan()
     .averageTouches(true)
@@ -80,16 +81,18 @@ export default function useTransformGestures({
     .onBegin((e) => {
       "worklet";
 
-      if (stretchable) {
-        if (Math.abs(width - e.x) < DEFAULT_AREA_OF_INTERACTION) {
+      if (stretchable.value) {
+        if (Math.abs(width.value - e.x) < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.RIGHT;
-        } else if (Math.abs(height - e.y) < DEFAULT_AREA_OF_INTERACTION) {
+        } else if (Math.abs(height.value - e.y) < DEFAULT_AREA_OF_INTERACTION) {
+          // This is not correct?
+          // ---------------------
           dragDir.value = DragDirection.DOWN;
         } else if (e.x < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.LEFT;
         } else if (
-          Math.abs(height - e.y) >
-          Math.abs(height - DEFAULT_AREA_OF_INTERACTION)
+          Math.abs(height.value - e.y) >
+          Math.abs(height.value - DEFAULT_AREA_OF_INTERACTION)
         ) {
           dragDir.value = DragDirection.UP;
         }
@@ -102,39 +105,39 @@ export default function useTransformGestures({
 
       switch (dragDir.value) {
         case DragDirection.NONE:
-          matrix.value = multiply4(
+          matrix.value.value = multiply4(
             translate(e.changeX, e.changeY, 0),
-            matrix.value
+            matrix.value.value
           );
           updateOnEnd();
           break;
         case DragDirection.RIGHT:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performWidthUpdate({
-              newWidth: width + e.changeX * SPEED_FACTOR,
+              newWidth: width.value + e.changeX * SPEED_FACTOR,
             });
           }
           break;
         case DragDirection.LEFT:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performWidthUpdate({
-              newWidth: width - e.changeX * SPEED_FACTOR,
-              x: x + e.changeX * SPEED_FACTOR,
+              newWidth: width.value - e.changeX * SPEED_FACTOR,
+              x: x.value + e.changeX * SPEED_FACTOR,
             });
           }
           break;
         case DragDirection.UP:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performHeightUpdate({
-              newHeight: height - e.changeY * SPEED_FACTOR,
-              y: y + e.changeY * SPEED_FACTOR,
+              newHeight: height.value - e.changeY * SPEED_FACTOR,
+              y: y.value + e.changeY * SPEED_FACTOR,
             });
           }
           break;
         case DragDirection.DOWN:
           if (clock.value % THROTTLE_AMOUNT === 0) {
             performHeightUpdate({
-              newHeight: height + e.changeY * SPEED_FACTOR,
+              newHeight: height.value + e.changeY * SPEED_FACTOR,
             });
           }
           break;
@@ -159,14 +162,14 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x: focalX,
-        y: focalY,
+        x: focalX.value,
+        y: focalY.value,
       };
-      savedMatrix.value = matrix.value;
+      savedMatrix.value = matrix.value.value;
     })
     .onChange((e) => {
       "worklet";
-      matrix.value = multiply4(
+      matrix.value.value = multiply4(
         savedMatrix.value,
         rotateZ(e.rotation, origin.value)
       );
@@ -178,14 +181,14 @@ export default function useTransformGestures({
     .onBegin(() => {
       "worklet";
       origin.value = {
-        x: focalX,
-        y: focalY,
+        x: focalX.value,
+        y: focalY.value,
       };
-      savedMatrix.value = matrix.value;
+      savedMatrix.value = matrix.value.value;
     })
     .onChange((e) => {
       "worklet";
-      matrix.value = multiply4(
+      matrix.value.value = multiply4(
         savedMatrix.value,
         scale(e.scale, e.scale, 1, origin.value)
       );

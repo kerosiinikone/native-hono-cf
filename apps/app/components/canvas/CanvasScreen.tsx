@@ -32,7 +32,7 @@ export default function CanvasScreen({
     setUncommitedCanvasChanges,
     savedCanvasState,
   } = useDocumentStore((state) => state);
-  const { bindStore, setSavedState } = withSkia_useCanvasStore(
+  const { bindStore, setSavedState, hasChanged } = withSkia_useCanvasStore(
     (state) => state
   );
   const canvasRef = useRef<CanvasDoc | null>(null);
@@ -64,8 +64,6 @@ export default function CanvasScreen({
     canvasRef.current = canvasDoc;
     // Bind the store to the canvas document -> is this even necessary?
     bindStore(canvasDoc);
-    // Trigger a rerender
-    setUncommitedCanvasChanges(uncommitedCanvasChanges);
     // This is the place where either we send the "buffered" changes or
     // accumulate them (by merging) until a given throttle delay has passed
     canvasDoc.on("Send", (e) => {
@@ -127,8 +125,8 @@ export default function CanvasScreen({
 
   return (
     <GestureHandlerRootView style={gStyles.container}>
-      {canvasRef.current && <SkiaCn doc={canvasRef.current} />}
       <CanvasPointerMode switchView={switchView} />
+      {canvasRef.current && <SkiaCn doc={canvasRef.current} />}
       {canvasRef.current && <Toolbar doc={canvasRef.current} />}
     </GestureHandlerRootView>
   );
