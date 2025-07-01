@@ -60,50 +60,43 @@ export default memo(function SelectPath({
   const hasChanged = withSkia_useCanvasStore((state) => state.hasChanged);
   const hasChangedView = useSharedValue(hasChanged ? 1 : 0);
 
-  useEffect(() => {
-    hasChangedView.value = hasChanged ? 1 : 0;
-  }, [hasChanged, hasChangedView]);
-
   const gesture = useTransformGestures({ element: elementRef });
 
   const { x, y, focalX, focalY, width, height, matrix } = elementRef;
 
-  // TODO: Make this better!!!
-  const style = useMemo(
-    () => {
-      return useAnimatedStyle(() => {
-        const _ = hasChangedView.value;
-        return {
-          ...trivStyles.path,
-          left: x.value - (elementRef.isCircle() ? width.value / 2 : 0),
-          top: y.value - (elementRef.isCircle() ? height.value / 2 : 0),
-          width: width.value,
-          height: height.value,
-          transform: [
-            {
-              matrix: computeFinalTransformMatrix(
-                canvasMatrix,
-                matrix.value,
-                focalX.value,
-                focalY.value
-              ),
-            },
-          ],
-        };
-      });
-    },
-    // Path deps, not the select path deps!
-    [
-      x.value,
-      y.value,
-      focalX.value,
-      focalY.value,
-      width.value,
-      height.value,
-      matrix.value,
-      canvasMatrix,
-    ]
-  );
+  useEffect(() => {
+    hasChangedView.value = hasChanged ? 1 : 0;
+  }, [hasChanged, hasChangedView]);
+
+  const style = useAnimatedStyle(() => {
+    const _ = hasChangedView.value;
+    return {
+      ...trivStyles.path,
+      left: x.value - (elementRef.isCircle() ? width.value / 2 : 0),
+      top: y.value - (elementRef.isCircle() ? height.value / 2 : 0),
+      width: width.value,
+      height: height.value,
+      transform: [
+        {
+          matrix: computeFinalTransformMatrix(
+            canvasMatrix,
+            matrix.value,
+            focalX.value,
+            focalY.value
+          ),
+        },
+      ],
+    };
+  }, [
+    x.value,
+    y.value,
+    focalX.value,
+    focalY.value,
+    width.value,
+    height.value,
+    matrix.value,
+    canvasMatrix,
+  ]);
 
   return (
     <>

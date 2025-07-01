@@ -14,21 +14,6 @@ enum DragDirection {
   DOWN = "down",
 }
 
-// interface TransformGesturesProps {
-//   element: CElement;
-//   // matrix: SharedValue<Matrix4>;
-//   // x: number;
-//   // y: number;
-//   // focalX: number;
-//   // focalY: number;
-//   // width: number;
-//   // height: number;
-//   // stretchable: boolean;
-// }
-
-// TODO: Optimize the resizing animation and
-// make more generic for future shapes !!!
-
 const SPEED_FACTOR = 2;
 const MIN_WIDTH = 1;
 const MIN_HEIGHT = 1;
@@ -40,35 +25,34 @@ export function multiply(...matrices: Matrix4[]) {
   return matrices.reduce((acc, matrix) => multiply4(acc, matrix), Matrix4());
 }
 
-export default function useTransformGestures(
-  { element }: { element: CElement } // TransformGesturesProps
-): SimultaneousGesture {
+export default function useTransformGestures({
+  element,
+}: {
+  element: CElement;
+}): SimultaneousGesture {
+  const notifyLocalChange = withSkia_useCanvasStore(
+    (state) => state.notifyLocalChange
+  );
+
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
   const clock = useSharedValue(0);
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
 
-  const notifyLocalChange = withSkia_useCanvasStore(
-    (state) => state.notifyLocalChange
-  );
+  const { x, y, focalX, focalY, width, height, matrix } = element;
 
-  const { x, y, focalX, focalY, width, height, stretchable, matrix } = element;
-
-  // Throttle these
   const performWidthUpdate = (args: { newWidth: number; x?: number }) => {
     if (!args) return;
     element.editRectWidth(Math.max(MIN_WIDTH, args.newWidth), args.x);
     notifyLocalChange();
   };
 
-  // Throttle these
   const performHeightUpdate = (args: { newHeight: number; y?: number }) => {
     if (!args) return;
     element.editRectHeight(Math.max(MIN_HEIGHT, args.newHeight), args.y);
     notifyLocalChange();
   };
 
-  // Throttle these
   const updateOnEnd = useCallback(() => {
     "worklet";
     element.setMatrix(matrix.value.value);
@@ -81,12 +65,10 @@ export default function useTransformGestures(
     .onBegin((e) => {
       "worklet";
 
-      if (stretchable.value) {
+      if (element.isStretchable()) {
         if (Math.abs(width.value - e.x) < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.RIGHT;
         } else if (Math.abs(height.value - e.y) < DEFAULT_AREA_OF_INTERACTION) {
-          // This is not correct?
-          // ---------------------
           dragDir.value = DragDirection.DOWN;
         } else if (e.x < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.LEFT;
@@ -100,9 +82,7 @@ export default function useTransformGestures(
     })
     .onChange((e) => {
       "worklet";
-
       clock.value += 1; // Simple throttling
-
       switch (dragDir.value) {
         case DragDirection.NONE:
           matrix.value.value = multiply4(
@@ -140,9 +120,6 @@ export default function useTransformGestures(
               newHeight: height.value + e.changeY * SPEED_FACTOR,
             });
           }
-          break;
-        default:
-          console.warn("Unknown drag direction", dragDir);
           break;
       }
     })

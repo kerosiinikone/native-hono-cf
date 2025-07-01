@@ -32,7 +32,7 @@ export default function CanvasScreen({
     setUncommitedCanvasChanges,
     savedCanvasState,
   } = useDocumentStore((state) => state);
-  const { bindStore, setSavedState, hasChanged } = withSkia_useCanvasStore(
+  const { bindStore, setSavedState } = withSkia_useCanvasStore(
     (state) => state
   );
   const canvasRef = useRef<CanvasDoc | null>(null);

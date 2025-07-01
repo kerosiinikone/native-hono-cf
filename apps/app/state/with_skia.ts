@@ -14,7 +14,6 @@ export type ClientObject = {
   width: number;
   height: number;
   matrix: Matrix4;
-  stretchable: boolean;
 };
 
 type State = {
@@ -44,7 +43,6 @@ export const withSkia_useCanvasStore = create<
   uncommitedChanges: new Uint8Array(),
   canvasMatrix: makeMutable(Matrix4()),
 
-  // Naive
   notifyLocalChange: () => {
     const { doc, hasChanged } = get();
     if (doc) {
@@ -61,6 +59,5 @@ export const withSkia_useCanvasStore = create<
     }
   },
 
-  // TODO: Remove or make work
   setSavedState: (state: Uint8Array) => set({ savedState: state }),
 }));

@@ -1,4 +1,4 @@
-import { CanvasDoc, CCanvas } from "@/state/c_canvas";
+import { CanvasDoc } from "@/state/c_canvas";
 import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
 import { ElementType } from "@native-hono-cf/shared";
 import {
@@ -62,11 +62,10 @@ function generateNewPath(
     width,
     height,
     matrix: transformedMatrix, // Regular matrix, not mutable
-    stretchable: false,
   };
 }
 
-export default function useDrawingGesture(doc: CCanvas): {
+export default function useDrawingGesture(doc: CanvasDoc): {
   drawingGesture: PanGesture;
   currentPath: SharedValue<SkPath>;
 } {
@@ -127,8 +126,6 @@ export default function useDrawingGesture(doc: CCanvas): {
         matrix,
         canvasMatrix
       );
-
-      // Alter the DOC to include the new path element
       doc.addElement({ ...newPath, type: ElementType.Path });
       resetCanvasVariables();
     });

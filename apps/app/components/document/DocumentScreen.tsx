@@ -45,6 +45,7 @@ function DocumentHeadingArea({
 }) {
   useCollab(doc.heading);
   const text = optimistic !== "" ? optimistic : doc.heading.value;
+
   return (
     <TextInput
       autoFocus={true}
@@ -190,7 +191,6 @@ export default function DocumentScreen({
     if (!documentId) return;
     const doc = new TextDoc();
     bindStore(doc);
-
     // This has to be bound here since it uses the WS hook function
     doc.on("Send", (e) => {
       sendWithoutBuffer({
@@ -202,8 +202,7 @@ export default function DocumentScreen({
 
     setLoaded(true);
     return () => {
-      // TODO: Save state here?
-      //
+      // TODO: Similar snapshots here?
       // Cleanup the document store
       clearTimeout(timeoutRef.current!);
     };

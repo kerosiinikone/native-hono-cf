@@ -114,19 +114,6 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
     };
   }, [documentId]);
 
-  // const bufferMessage = useCallback(
-  //   (msg: WSMessage) => {
-  //     if (sendBufferIntervalRef.current == null) {
-  //       sendBufferIntervalRef.current = setInterval(
-  //         sendBufferedMessages,
-  //         BUFFER_INTERVAL
-  //       );
-  //     }
-  //     queuedWSMessages.current.push(msg);
-  //   },
-  //   [documentId]
-  // );
-
   const sendWithoutBuffer = useCallback(
     (msg: WSMessage) => {
       if (socketRef.current?.readyState === WebSocket.OPEN) {

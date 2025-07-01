@@ -14,9 +14,8 @@ export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
   useCollab(doc.elements);
 
   const drawingMode = useDocumentStore((state) => state.drawingMode);
-  const { canvasMatrix, hasChanged } = withSkia_useCanvasStore(
-    (state) => state
-  );
+  const canvasMatrix = withSkia_useCanvasStore((state) => state.canvasMatrix);
+  const _ = withSkia_useCanvasStore((state) => state.hasChanged);
 
   const { drawingGesture, currentPath } = useDrawingGesture(doc);
   const canvasPanGesture = useCanvasPanGesture();
@@ -33,18 +32,17 @@ export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
       <GestureDetector gesture={gesture}>
         <Canvas style={cnStyles.canvas}>
           <Group transform={transform}>
-            {hasChanged !== null &&
-              doc.elements.map((el, i) => (
-                <Path
-                  key={i}
-                  path={el.path.value}
-                  matrix={el.matrix.value}
-                  style="stroke"
-                  strokeWidth={5}
-                  strokeCap="round"
-                  strokeJoin="round"
-                />
-              ))}
+            {doc.elements.map((el, i) => (
+              <Path
+                key={i}
+                path={el.path.value}
+                matrix={el.matrix.value}
+                style="stroke"
+                strokeWidth={5}
+                strokeCap="round"
+                strokeJoin="round"
+              />
+            ))}
           </Group>
           <Path
             path={currentPath}

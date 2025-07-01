@@ -17,7 +17,6 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 export interface ElementProperties {
   path: SkPath;
   type: ElementType;
-  stretchable: boolean;
   x: number;
   y: number;
   focalX: number;
@@ -82,13 +81,12 @@ export class CanvasDoc extends AbstractDoc {
 
   addElement(el: ElementProperties): void {
     const newEl = this.elements.push();
+    newEl.setType(el.type);
     newEl.setPos(el.x, el.y);
     newEl.setFocalPoint(el.focalX, el.focalY);
     newEl.setSize(el.width, el.height);
     newEl.setMatrix(el.matrix);
     newEl.setPath(el.path);
-    newEl.setType(el.type);
-    newEl.stretchable.set(el.stretchable);
   }
 
   removeElement(el: CElement): void {
@@ -98,9 +96,8 @@ export class CanvasDoc extends AbstractDoc {
     }
   }
 
-  // Keep element?
-  // Archive element?
-
+  // Keep and archive element?
+  //
   // TODO: Transfer protocol util functions here (or make them into
   // hooks of their own) !!!
 }
@@ -109,7 +106,6 @@ export class CElement extends CObject {
   readonly type: CVar<ElementType>;
   readonly path: CVar<SkPath>;
   readonly matrix: CVar<SharedValue<Matrix4>>;
-  readonly stretchable: CVar<boolean>;
   readonly x: CVar<number>;
   readonly y: CVar<number>;
   readonly focalX: CVar<number>;
@@ -144,36 +140,14 @@ export class CElement extends CObject {
     this.focalY = super.registerCollab("focalY", (init) => new CVar(init, 0));
     this.width = super.registerCollab("width", (init) => new CVar(init, 0));
     this.height = super.registerCollab("height", (init) => new CVar(init, 0));
-    this.stretchable = super.registerCollab(
-      "stretchable",
-      (init) => new CVar(init, this._isRect())
-    );
   }
 
-  // TODO: Getters not needed
-
-  posX(): number {
-    return this.x.value;
+  isStretchable(): boolean {
+    return this._isRect();
   }
 
-  posY(): number {
-    return this.y.value;
-  }
-
-  focX(): number {
-    return this.focalX.value;
-  }
-
-  focY(): number {
-    return this.focalY.value;
-  }
-
-  elementWidth(): number {
-    return this.width.value;
-  }
-
-  elementHeight(): number {
-    return this.height.value;
+  isCircle(): boolean {
+    return this.type.value === ElementType.Circle;
   }
 
   setPos(x: number, y: number): void {
@@ -201,41 +175,38 @@ export class CElement extends CObject {
 
   setType(type: ElementType): void {
     this.type.set(type);
-    this.stretchable.set(this._isRect());
   }
 
-  editRectWidth(newWidth: number, shiftX: number = 0): void {
+  editRectWidth(newWidth: number, shiftX?: number): void {
+    let nw = newWidth;
     if (!this._isRect()) return;
     if (newWidth < 50) {
-      newWidth = 50;
+      nw = 50;
     }
+    this.setPos(shiftX ?? this.x.value, this.y.value);
+    this.setFocalPoint(this.x.value + nw / 2, this.focalY.value);
+    this.setSize(nw, this.height.value);
     this.setPath(
       Skia.Path.Make().addRect(
-        rect(shiftX ?? this.posX, this.posY(), newWidth, this.elementHeight())
+        rect(this.x.value, this.y.value, this.width.value, this.height.value)
       )
     );
-    this.setPos(shiftX ?? this.posX(), this.posY());
-    this.setFocalPoint(this.posX() + newWidth / 2, this.focY());
-    this.setSize(newWidth, this.elementHeight());
   }
 
-  editRectHeight(newHeight: number, shiftY: number = 0): void {
+  editRectHeight(newHeight: number, shiftY?: number): void {
+    let nh = newHeight;
     if (!this._isRect()) return;
     if (newHeight < 50) {
-      newHeight = 50;
+      nh = 50;
     }
+    this.setPos(this.x.value, shiftY ?? this.y.value);
+    this.setFocalPoint(this.focalX.value, this.y.value + nh / 2);
+    this.setSize(this.width.value, nh);
     this.setPath(
       Skia.Path.Make().addRect(
-        rect(this.posX(), shiftY ?? this.posY(), this.elementWidth(), newHeight)
+        rect(this.x.value, this.y.value, this.width.value, this.height.value)
       )
     );
-    this.setPos(this.posX(), shiftY ?? this.posY());
-    this.setFocalPoint(this.focX(), this.posY() + newHeight / 2);
-    this.setSize(this.elementWidth(), newHeight);
-  }
-
-  isCircle(): boolean {
-    return this.type.value === ElementType.Circle;
   }
 
   private setWidth(width: number): void {
