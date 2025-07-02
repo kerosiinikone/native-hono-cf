@@ -5,7 +5,7 @@ import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
 import { useWindowDimensions } from "react-native";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";
-import { useSharedValue } from "react-native-reanimated";
+import { SharedValue, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
 enum DragDirection {
@@ -30,8 +30,10 @@ export function multiply(...matrices: Matrix4[]) {
 export default function useTransformGestures({
   element,
   deleteElement,
+  pointerPos,
 }: {
   element: CElement;
+  pointerPos: SharedValue<{ x: number; y: number }>;
   deleteElement: (el: CElement) => void;
 }): SimultaneousGesture {
   const {
@@ -92,15 +94,18 @@ export default function useTransformGestures({
     })
     .onChange((e) => {
       "worklet";
-      clock.value += 1; // Simple throttling
+      // Simple throttling
+      clock.value += 1;
       switch (dragDir.value) {
         case DragDirection.NONE:
           matrix.value.value = multiply4(
             translate(e.changeX, e.changeY, 0),
             matrix.value.value
           );
-          const { x: newX, y: newY } = element.getAbsolutePos();
-          element.setAbsolutePos(newX + e.changeX, newY + e.changeY);
+          pointerPos.value = {
+            x: e.absoluteX,
+            y: e.absoluteY,
+          };
           updateOnEnd();
           break;
         case DragDirection.RIGHT:
@@ -135,7 +140,7 @@ export default function useTransformGestures({
           break;
       }
     })
-    .onEnd(() => {
+    .onEnd((e) => {
       "worklet";
       if (dragDir.value !== DragDirection.NONE) {
         dragDir.value = DragDirection.NONE;
@@ -145,7 +150,7 @@ export default function useTransformGestures({
       // and call a store function to delete it
       if (
         element === elementBeingDragged &&
-        isAtBottomLeft(element, canvasMatrix.value, heightW)
+        isAtBottomLeft(e.absoluteX, e.absoluteY, canvasMatrix.value, heightW)
       ) {
         deleteElement(element);
       }

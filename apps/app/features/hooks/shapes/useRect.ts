@@ -1,5 +1,4 @@
-import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
-import { copyMatrix } from "@/utils/matrix";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, rect, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
@@ -20,7 +19,7 @@ export default function useRect() {
   const sharedRect = r.addRect(rect(x, y, rWidth, rHeight));
 
   return {
-    createRectPath: (): ClientObject => ({
+    createRectPath: () => ({
       path: sharedRect.copy(),
       x,
       y,
@@ -29,10 +28,9 @@ export default function useRect() {
       width: rWidth,
       height: rHeight,
       matrix: multiply4(
-        copyMatrix(matrix.value),
+        matrix.value,
         translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
       ),
-      stretchable: true,
     }),
   };
 }

@@ -87,7 +87,6 @@ export class CanvasDoc extends AbstractDoc {
     newEl.setSize(el.width, el.height);
     newEl.setMatrix(el.matrix);
     newEl.setPath(el.path);
-    newEl.setAbsolutePos(el.x, el.y);
   }
 
   removeElement(el: CElement): void {
@@ -104,11 +103,6 @@ export class CanvasDoc extends AbstractDoc {
 }
 
 export class CElement extends CObject {
-  // For determining the absolute position of the elemennt
-  // -> deletion zone
-  private absoluteX: number;
-  private absoluteY: number;
-
   readonly type: CVar<ElementType>;
   readonly path: CVar<SkPath>;
   readonly matrix: CVar<SharedValue<Matrix4>>;
@@ -146,9 +140,6 @@ export class CElement extends CObject {
     this.focalY = super.registerCollab("focalY", (init) => new CVar(init, 0));
     this.width = super.registerCollab("width", (init) => new CVar(init, 0));
     this.height = super.registerCollab("height", (init) => new CVar(init, 0));
-
-    this.absoluteX = this.x.value;
-    this.absoluteY = this.y.value;
   }
 
   isStretchable(): boolean {
@@ -184,15 +175,6 @@ export class CElement extends CObject {
 
   setType(type: ElementType): void {
     this.type.set(type);
-  }
-
-  setAbsolutePos(x: number, y: number): void {
-    this.absoluteX = x;
-    this.absoluteY = y;
-  }
-
-  getAbsolutePos(): { x: number; y: number } {
-    return { x: this.absoluteX, y: this.absoluteY };
   }
 
   editRectWidth(newWidth: number, shiftX?: number): void {

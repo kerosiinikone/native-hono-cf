@@ -1,5 +1,4 @@
-import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
-import { copyMatrix } from "@/utils/matrix";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, Skia } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
@@ -19,7 +18,7 @@ export default function useCircle() {
   const sharedCirc = r.addCircle(x, y, radius);
 
   return {
-    createCirclePath: (): ClientObject => ({
+    createCirclePath: () => ({
       path: sharedCirc.copy(),
       x,
       y,
@@ -28,10 +27,9 @@ export default function useCircle() {
       width: radius * 2,
       height: radius * 2,
       matrix: multiply4(
-        copyMatrix(matrix.value),
+        matrix.value,
         translate(-canvasMatrix.value[3], -canvasMatrix.value[7], 0)
       ),
-      stretchable: false,
     }),
   };
 }

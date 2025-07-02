@@ -24,16 +24,18 @@ interface SelectPathProps {
   deleteElement: (el: CElement) => void;
 }
 
+const DELETION_THRESHOLD = 50;
 // Make global as a helper function
 // Take into account the canvas matrix shift
 export function isAtBottomLeft(
-  e: CElement,
+  x: number,
+  y: number,
   shiftMatrix: Matrix4,
   windowHeight: number
 ): boolean {
   return (
-    e.getAbsolutePos().x + shiftMatrix[3] <= 50 &&
-    e.getAbsolutePos().y + shiftMatrix[7] + e.height.value >= windowHeight - 50
+    x + shiftMatrix[3] <= DELETION_THRESHOLD &&
+    y + shiftMatrix[7] >= windowHeight - DELETION_THRESHOLD
   );
 }
 
@@ -65,6 +67,11 @@ export default memo(function ({
   const { height: windowH } = useWindowDimensions();
   const { x, y, focalX, focalY, width, height, matrix } = elementRef;
 
+  const pointerPos = useSharedValue({
+    x: 0,
+    y: 0,
+  });
+
   const hasChanged = withSkia_useCanvasStore((state) => state.hasChanged);
   const elementBeingDragged = withSkia_useCanvasStore(
     (state) => state.elementBeingDragged
@@ -74,6 +81,7 @@ export default memo(function ({
   const gesture = useTransformGestures({
     element: elementRef,
     deleteElement,
+    pointerPos,
   });
 
   useEffect(() => {
@@ -84,7 +92,12 @@ export default memo(function ({
     const _ = hasChangedView.value;
     return {
       ...(elementBeingDragged === elementRef &&
-      isAtBottomLeft(elementRef, canvasMatrix.value, windowH)
+      isAtBottomLeft(
+        pointerPos.value.x,
+        pointerPos.value.y,
+        canvasMatrix.value,
+        windowH
+      )
         ? trivStylesRedShadow.path
         : trivStyles.path),
       left: x.value - (elementRef.isCircle() ? width.value / 2 : 0),
