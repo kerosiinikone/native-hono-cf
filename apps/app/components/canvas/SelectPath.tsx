@@ -3,14 +3,13 @@ import useTransformGestures, {
 } from "@/features/hooks/useTransformGestures";
 import { CElement } from "@/state/c_canvas";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
-import { memo, useMemo } from "react";
 import {
   convertToAffineMatrix,
   convertToColumnMajor,
   Matrix4,
 } from "@shopify/react-native-skia";
-import { useEffect } from "react";
-import { StyleSheet } from "react-native";
+import { memo, useEffect } from "react";
+import { StyleSheet, useWindowDimensions } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   SharedValue,
@@ -22,15 +21,20 @@ import { translate } from "react-native-redash";
 interface SelectPathProps {
   canvasMatrix: SharedValue<Matrix4>;
   elementRef: CElement;
-  // x: number;
-  // y: number;
-  // focalX: number;
-  // focalY: number;
-  // stretchable: boolean;
-  // width: number;
-  // matrix: SharedValue<Matrix4>;
-  // type: ElementType;
-  // height: number;
+  deleteElement: (el: CElement) => void;
+}
+
+// Make global as a helper function
+// Take into account the canvas matrix shift
+export function isAtBottomLeft(
+  e: CElement,
+  shiftMatrix: Matrix4,
+  windowHeight: number
+): boolean {
+  return (
+    e.getAbsolutePos().x + shiftMatrix[3] <= 50 &&
+    e.getAbsolutePos().y + shiftMatrix[7] + e.height.value >= windowHeight - 50
+  );
 }
 
 function computeFinalTransformMatrix(
@@ -53,16 +57,24 @@ function computeFinalTransformMatrix(
   return convertToAffineMatrix(finalTransformMatrixForStyle);
 }
 
-export default memo(function SelectPath({
+export default memo(function ({
   elementRef,
   canvasMatrix,
+  deleteElement,
 }: SelectPathProps) {
+  const { height: windowH } = useWindowDimensions();
+  const { x, y, focalX, focalY, width, height, matrix } = elementRef;
+
   const hasChanged = withSkia_useCanvasStore((state) => state.hasChanged);
+  const elementBeingDragged = withSkia_useCanvasStore(
+    (state) => state.elementBeingDragged
+  );
   const hasChangedView = useSharedValue(hasChanged ? 1 : 0);
 
-  const gesture = useTransformGestures({ element: elementRef });
-
-  const { x, y, focalX, focalY, width, height, matrix } = elementRef;
+  const gesture = useTransformGestures({
+    element: elementRef,
+    deleteElement,
+  });
 
   useEffect(() => {
     hasChangedView.value = hasChanged ? 1 : 0;
@@ -71,7 +83,10 @@ export default memo(function SelectPath({
   const style = useAnimatedStyle(() => {
     const _ = hasChangedView.value;
     return {
-      ...trivStyles.path,
+      ...(elementBeingDragged === elementRef &&
+      isAtBottomLeft(elementRef, canvasMatrix.value, windowH)
+        ? trivStylesRedShadow.path
+        : trivStyles.path),
       left: x.value - (elementRef.isCircle() ? width.value / 2 : 0),
       top: y.value - (elementRef.isCircle() ? height.value / 2 : 0),
       width: width.value,
@@ -107,9 +122,16 @@ export default memo(function SelectPath({
   );
 });
 
+// Merge these?
 const trivStyles = StyleSheet.create({
   path: {
     position: "absolute",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+});
+const trivStylesRedShadow = StyleSheet.create({
+  path: {
+    position: "absolute",
+    backgroundColor: "rgba(150, 0, 0, 0.5)",
   },
 });

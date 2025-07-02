@@ -1,7 +1,9 @@
+import { isAtBottomLeft } from "@/components/canvas/SelectPath";
 import { CElement } from "@/state/c_canvas";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
 import { useCallback } from "react";
+import { useWindowDimensions } from "react-native";
 import { Gesture, SimultaneousGesture } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
@@ -27,12 +29,18 @@ export function multiply(...matrices: Matrix4[]) {
 
 export default function useTransformGestures({
   element,
+  deleteElement,
 }: {
   element: CElement;
+  deleteElement: (el: CElement) => void;
 }): SimultaneousGesture {
-  const notifyLocalChange = withSkia_useCanvasStore(
-    (state) => state.notifyLocalChange
-  );
+  const {
+    setElementBeingDragged,
+    unsetElementBeingDragged,
+    canvasMatrix,
+    elementBeingDragged,
+    notifyLocalChange,
+  } = withSkia_useCanvasStore((state) => state);
 
   const savedMatrix = useSharedValue(Matrix4());
   const origin = useSharedValue({ x: 0, y: 0 });
@@ -40,6 +48,7 @@ export default function useTransformGestures({
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
 
   const { x, y, focalX, focalY, width, height, matrix } = element;
+  const { height: heightW } = useWindowDimensions();
 
   const performWidthUpdate = (args: { newWidth: number; x?: number }) => {
     if (!args) return;
@@ -79,6 +88,7 @@ export default function useTransformGestures({
           dragDir.value = DragDirection.UP;
         }
       }
+      if (dragDir.value === DragDirection.NONE) setElementBeingDragged(element);
     })
     .onChange((e) => {
       "worklet";
@@ -89,6 +99,8 @@ export default function useTransformGestures({
             translate(e.changeX, e.changeY, 0),
             matrix.value.value
           );
+          const { x: newX, y: newY } = element.getAbsolutePos();
+          element.setAbsolutePos(newX + e.changeX, newY + e.changeY);
           updateOnEnd();
           break;
         case DragDirection.RIGHT:
@@ -129,6 +141,15 @@ export default function useTransformGestures({
         dragDir.value = DragDirection.NONE;
         updateOnEnd();
       }
+      // Check here wether the element is at the deletion area
+      // and call a store function to delete it
+      if (
+        element === elementBeingDragged &&
+        isAtBottomLeft(element, canvasMatrix.value, heightW)
+      ) {
+        deleteElement(element);
+      }
+      unsetElementBeingDragged();
     });
 
   // Matrix rotation causes edge dragging issues -> deal with it later

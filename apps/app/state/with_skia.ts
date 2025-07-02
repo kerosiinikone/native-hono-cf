@@ -1,9 +1,7 @@
 import { Matrix4, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
-import { CanvasDoc } from "./c_canvas";
-
-// TODO: What needs to be in this store?
+import { CanvasDoc, CElement } from "./c_canvas";
 
 export type ClientObject = {
   path: SkPath;
@@ -21,12 +19,15 @@ type State = {
   canvasMatrix: SharedValue<Matrix4>;
   savedState: Uint8Array;
   hasChanged: boolean;
+  elementBeingDragged: CElement | null;
 };
 
 type Actions = {
   bindStore: (instance: CanvasDoc) => void;
   setSavedState: (state: Uint8Array) => void;
   notifyLocalChange: () => void;
+  setElementBeingDragged: (element: CElement) => void;
+  unsetElementBeingDragged: () => void;
 };
 
 export const withSkia_useCanvasStore = create<
@@ -38,6 +39,7 @@ export const withSkia_useCanvasStore = create<
   // Might not be necessary to have this in the store
   // -> passed as a ref
   doc: null,
+  elementBeingDragged: null,
   hasChanged: false,
   savedState: new Uint8Array(),
   uncommitedChanges: new Uint8Array(),
@@ -60,4 +62,9 @@ export const withSkia_useCanvasStore = create<
   },
 
   setSavedState: (state: Uint8Array) => set({ savedState: state }),
+
+  setElementBeingDragged: (element: CElement) =>
+    set({ elementBeingDragged: element }),
+
+  unsetElementBeingDragged: () => set({ elementBeingDragged: null }),
 }));
