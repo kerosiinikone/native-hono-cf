@@ -3,6 +3,13 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
 import { CanvasDoc, CElement } from "./c_canvas";
 
+// Has to be a separate slice
+// since it is used in the Skia
+// canvas component (under the Skia WASM context)
+
+// Keeps track of the canvas messages
+// and the current state of the canvas
+
 export type ClientObject = {
   path: SkPath;
   x: number;
@@ -23,22 +30,16 @@ type State = {
 };
 
 type Actions = {
-  bindStore: (instance: CanvasDoc) => void;
+  loadSavedState: (instance: CanvasDoc) => void;
   setSavedState: (state: Uint8Array) => void;
   notifyLocalChange: () => void;
   setElementBeingDragged: (element: CElement) => void;
   unsetElementBeingDragged: () => void;
 };
 
-export const withSkia_useCanvasStore = create<
-  State &
-    Actions & {
-      doc: CanvasDoc | null;
-    }
->((set, get) => ({
+export const withSkia_useCanvasStore = create<State & Actions>((set, get) => ({
   // Might not be necessary to have this in the store
   // -> passed as a ref
-  doc: null,
   elementBeingDragged: null,
   hasChanged: false,
   savedState: new Uint8Array(),
@@ -46,15 +47,12 @@ export const withSkia_useCanvasStore = create<
   canvasMatrix: makeMutable(Matrix4()),
 
   notifyLocalChange: () => {
-    const { doc, hasChanged } = get();
-    if (doc) {
-      set({ hasChanged: !hasChanged });
-    }
+    const { hasChanged } = get();
+    set({ hasChanged: !hasChanged });
   },
 
-  bindStore: (instance: CanvasDoc) => {
+  loadSavedState: (instance: CanvasDoc) => {
     const { savedState, setSavedState } = get();
-    set({ doc: instance });
     if (savedState.length > 0) {
       instance.load(savedState);
       setSavedState(new Uint8Array());

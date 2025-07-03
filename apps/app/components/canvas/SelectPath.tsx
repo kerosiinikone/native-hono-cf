@@ -19,24 +19,18 @@ import Animated, {
 import { translate } from "react-native-redash";
 
 interface SelectPathProps {
-  canvasMatrix: SharedValue<Matrix4>;
   elementRef: CElement;
   deleteElement: (el: CElement) => void;
 }
 
 const DELETION_THRESHOLD = 50;
-// Make global as a helper function
-// Take into account the canvas matrix shift
+
 export function isAtBottomLeft(
   x: number,
   y: number,
-  shiftMatrix: Matrix4,
   windowHeight: number
 ): boolean {
-  return (
-    x + shiftMatrix[3] <= DELETION_THRESHOLD &&
-    y + shiftMatrix[7] >= windowHeight - DELETION_THRESHOLD
-  );
+  return x <= DELETION_THRESHOLD && y >= windowHeight - DELETION_THRESHOLD;
 }
 
 function computeFinalTransformMatrix(
@@ -59,25 +53,18 @@ function computeFinalTransformMatrix(
   return convertToAffineMatrix(finalTransformMatrixForStyle);
 }
 
-export default memo(function ({
-  elementRef,
-  canvasMatrix,
-  deleteElement,
-}: SelectPathProps) {
-  const { height: windowH } = useWindowDimensions();
+export default memo(function ({ elementRef, deleteElement }: SelectPathProps) {
   const { x, y, focalX, focalY, width, height, matrix } = elementRef;
-
+  const { height: windowH } = useWindowDimensions();
+  const { hasChanged, elementBeingDragged } = withSkia_useCanvasStore(
+    (state) => state
+  );
+  const canvasMatrix = withSkia_useCanvasStore((state) => state.canvasMatrix);
+  const hasChangedView = useSharedValue(hasChanged ? 1 : 0);
   const pointerPos = useSharedValue({
     x: 0,
     y: 0,
   });
-
-  const hasChanged = withSkia_useCanvasStore((state) => state.hasChanged);
-  const elementBeingDragged = withSkia_useCanvasStore(
-    (state) => state.elementBeingDragged
-  );
-  const hasChangedView = useSharedValue(hasChanged ? 1 : 0);
-
   const gesture = useTransformGestures({
     element: elementRef,
     deleteElement,
@@ -89,17 +76,16 @@ export default memo(function ({
   }, [hasChanged, hasChangedView]);
 
   const style = useAnimatedStyle(() => {
+    const isBeingDeleted =
+      isAtBottomLeft(pointerPos.value.x, pointerPos.value.y, windowH) &&
+      elementRef === elementBeingDragged;
+    // To trigger a rerender (sharedvalue change)
     const _ = hasChangedView.value;
     return {
-      ...(elementBeingDragged === elementRef &&
-      isAtBottomLeft(
-        pointerPos.value.x,
-        pointerPos.value.y,
-        canvasMatrix.value,
-        windowH
-      )
-        ? trivStylesRedShadow.path
-        : trivStyles.path),
+      ...trivStyles.path,
+      backgroundColor: isBeingDeleted
+        ? "rgba(150, 0, 0, 0.5)"
+        : "rgba(0, 0, 0, 0.5)",
       left: x.value - (elementRef.isCircle() ? width.value / 2 : 0),
       top: y.value - (elementRef.isCircle() ? height.value / 2 : 0),
       width: width.value,
@@ -135,16 +121,9 @@ export default memo(function ({
   );
 });
 
-// Merge these?
 const trivStyles = StyleSheet.create({
   path: {
     position: "absolute",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-});
-const trivStylesRedShadow = StyleSheet.create({
-  path: {
-    position: "absolute",
-    backgroundColor: "rgba(150, 0, 0, 0.5)",
   },
 });

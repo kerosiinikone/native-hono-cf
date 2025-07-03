@@ -171,6 +171,7 @@ export class DocumentSession {
               );
               this.persistState();
               break;
+
             default:
               ws.send(
                 JSON.stringify({
@@ -183,6 +184,15 @@ export class DocumentSession {
               );
               return;
           }
+          break;
+        case MessageType.ERROR:
+          // Error message handling
+          // (log for now -> indicates internal proto fault)
+          if (command !== MessageCommand.INFO) return;
+          console.error(
+            "WebSocket error message received:",
+            wsMessageValidation.data
+          );
           break;
         default:
           ws.send(

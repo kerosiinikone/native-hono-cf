@@ -61,7 +61,7 @@ function generateNewPath(
     focalY,
     width,
     height,
-    matrix: transformedMatrix, // Regular matrix, not mutable
+    matrix: transformedMatrix,
   };
 }
 

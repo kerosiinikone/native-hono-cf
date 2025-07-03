@@ -1,6 +1,6 @@
 import useCanvasPanGesture from "@/features/hooks/useCanvasPanGesture";
 import useDrawingGesture from "@/features/hooks/useDrawingGesture";
-import { CanvasDoc, CElement } from "@/state/c_canvas";
+import { CanvasDoc } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { useCollab } from "@collabs/react";
@@ -26,7 +26,6 @@ export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
 
   const gesture = drawingMode === "draw" ? drawingGesture : canvasPanGesture;
 
-  // TODO: Delete area for UX! (bottom left corner)
   return (
     <>
       <GestureDetector gesture={gesture}>
@@ -58,7 +57,6 @@ export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
           <SelectPath
             key={i}
             elementRef={el}
-            canvasMatrix={canvasMatrix}
             deleteElement={() => doc.removeElement(el)}
           />
         ))}

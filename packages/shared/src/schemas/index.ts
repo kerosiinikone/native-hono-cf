@@ -16,11 +16,15 @@ export const base64Uint8ArrayString = z.string().refine((value) => {
   }
 });
 
-// TODO: lean this up later -> nore stricter type checking
-// Etc. -> MessageType.SETUP -> command has to be MessageCommand.INFO and payload is null!
+export const setupMessageSchema = z.object({
+  type: z.enum(["setup"]),
+  command: z.enum(["info"]),
+  payload: z.union([z.null(), z.undefined()]),
+});
+
 export const canvasWebSocketMessageSchema = z.object({
-  type: z.enum(["setup", "state", "error"]),
-  command: z.enum(["update", "delete", "add", "info", "snapshot"]),
+  type: z.enum(["state", "error", "setup"]),
+  command: z.enum(["update", "delete", "add", "snapshot"]),
   payload: z
     .union([
       z.object({
@@ -48,7 +52,12 @@ export const textWebSocketMessageSchema = z.object({
 export const webSocketMessageSchema = z.union([
   canvasWebSocketMessageSchema,
   textWebSocketMessageSchema,
+  setupMessageSchema,
 ]);
 
 export type DocumentSchema = z.infer<typeof documentSchema>;
 export type WebSocketMessageSchema = z.infer<typeof webSocketMessageSchema>;
+export type SetupMessageSchema = z.infer<typeof setupMessageSchema>;
+export type CanvasWebSocketMessageSchema = z.infer<
+  typeof canvasWebSocketMessageSchema
+>;

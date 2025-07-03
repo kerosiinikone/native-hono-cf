@@ -67,6 +67,8 @@ class SkPathSerializer implements Serializer<SkPath> {
   }
 }
 
+// Transfer protocol util functions here (or make them into
+// hooks of their own) !!!
 export class CanvasDoc extends AbstractDoc {
   readonly elements: CList<CElement, []>;
 
@@ -96,10 +98,18 @@ export class CanvasDoc extends AbstractDoc {
     }
   }
 
-  // Keep and archive element?
-  //
-  // TODO: Transfer protocol util functions here (or make them into
-  // hooks of their own) !!!
+  // For concurrency control (later maybe)
+  private _keepElement(el: CElement) {
+    this.elements.restore(el);
+  }
+
+  // For concurrency control (later maybe)
+  private _archiveElement(el: CElement) {
+    const idx = this.elements.indexOf(el);
+    if (idx !== -1) {
+      this.elements.archive(idx);
+    }
+  }
 }
 
 export class CElement extends CObject {
@@ -221,7 +231,3 @@ export class CElement extends CObject {
     return this.type.value === ElementType.Rect;
   }
 }
-
-export class CPathElement extends CElement {}
-export class CCircleElement extends CElement {}
-export class CRectElement extends CElement {}

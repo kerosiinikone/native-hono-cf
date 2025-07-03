@@ -39,7 +39,6 @@ export default function useTransformGestures({
   const {
     setElementBeingDragged,
     unsetElementBeingDragged,
-    canvasMatrix,
     elementBeingDragged,
     notifyLocalChange,
   } = withSkia_useCanvasStore((state) => state);
@@ -48,8 +47,8 @@ export default function useTransformGestures({
   const origin = useSharedValue({ x: 0, y: 0 });
   const clock = useSharedValue(0);
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
-
   const { x, y, focalX, focalY, width, height, matrix } = element;
+
   const { height: heightW } = useWindowDimensions();
 
   const performWidthUpdate = (args: { newWidth: number; x?: number }) => {
@@ -75,7 +74,6 @@ export default function useTransformGestures({
     .maxPointers(1)
     .onBegin((e) => {
       "worklet";
-
       if (element.isStretchable()) {
         if (Math.abs(width.value - e.x) < DEFAULT_AREA_OF_INTERACTION) {
           dragDir.value = DragDirection.RIGHT;
@@ -146,11 +144,9 @@ export default function useTransformGestures({
         dragDir.value = DragDirection.NONE;
         updateOnEnd();
       }
-      // Check here wether the element is at the deletion area
-      // and call a store function to delete it
       if (
         element === elementBeingDragged &&
-        isAtBottomLeft(e.absoluteX, e.absoluteY, canvasMatrix.value, heightW)
+        isAtBottomLeft(e.absoluteX, e.absoluteY, heightW)
       ) {
         deleteElement(element);
       }

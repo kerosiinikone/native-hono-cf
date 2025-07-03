@@ -32,7 +32,7 @@ export default function CanvasScreen({
     setUncommitedCanvasChanges,
     savedCanvasState,
   } = useDocumentStore((state) => state);
-  const { bindStore, setSavedState } = withSkia_useCanvasStore(
+  const { loadSavedState, setSavedState } = withSkia_useCanvasStore(
     (state) => state
   );
   const canvasRef = useRef<CanvasDoc | null>(null);
@@ -62,8 +62,9 @@ export default function CanvasScreen({
     if (!documentId) return;
     const canvasDoc = new CanvasDoc();
     canvasRef.current = canvasDoc;
-    // Bind the store to the canvas document -> is this even necessary?
-    bindStore(canvasDoc);
+    // This is where the doc would be bound to the store
+    // but now we just load the saved state without binding
+    loadSavedState(canvasDoc);
     // This is the place where either we send the "buffered" changes or
     // accumulate them (by merging) until a given throttle delay has passed
     canvasDoc.on("Send", (e) => {
@@ -88,12 +89,12 @@ export default function CanvasScreen({
       // Save for unmount -> send a MessageType.SNAPSHOT to the server!
       // Also periodically save the state and send it to the server!
       //
-      // useSendSnapshot hook? -> intervals on useEffect?
+      // TODO: useSendSnapshot hook? -> intervals on useEffect?
       //
       // Save and send the senderCounter as well!!!! -> verify latest state
       const save = canvasDoc.save();
       if (!save.length) return;
-      // TODO: Don't send if no changes have been made
+      // Don't send if no changes have been made?
       sendWithoutBuffer({
         type: MessageType.STATE,
         command: MessageCommand.SNAPSHOT,
@@ -116,7 +117,6 @@ export default function CanvasScreen({
   useEffect(() => {
     if (!canvasRef.current) return;
     // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
-    // This should in turn load the "merged" state from the server (not a complete state snapshot as it probably should be....)
     if (uncommitedCanvasChanges.length > 0) {
       canvasRef.current.receive(uncommitedCanvasChanges);
       setUncommitedCanvasChanges(new Uint8Array());
@@ -124,7 +124,7 @@ export default function CanvasScreen({
   }, [uncommitedCanvasChanges, canvasRef.current]);
 
   return (
-    <GestureHandlerRootView style={gStyles.container}>
+    <GestureHandlerRootView style={canvasStyles.container}>
       <CanvasPointerMode switchView={switchView} />
       {canvasRef.current && <SkiaCn doc={canvasRef.current} />}
       {canvasRef.current && <Toolbar doc={canvasRef.current} />}
@@ -132,6 +132,6 @@ export default function CanvasScreen({
   );
 }
 
-const gStyles = StyleSheet.create({
+const canvasStyles = StyleSheet.create({
   container: { flex: 1 },
 });

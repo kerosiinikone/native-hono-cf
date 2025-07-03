@@ -11,6 +11,7 @@ import { create } from "zustand";
 type State = {
   documentId: string | null;
   drawingMode: DrawingMode;
+  savedState: Uint8Array;
   uncommitedChanges: Uint8Array<ArrayBufferLike>;
   uncommitedCanvasChanges: Uint8Array<ArrayBufferLike>;
   savedCanvasState: Uint8Array<ArrayBufferLike>;
@@ -18,6 +19,8 @@ type State = {
 
 type Actions = {
   setDocumentId: (id: string | null) => void;
+  loadSavedState: () => void;
+  setSavedState: (state: Uint8Array) => void;
   setDrawingMode: (mode: DrawingMode) => void;
   receiveRemoteMessage: (message: WSMessage) => void;
   bindStore: (instance: TextDoc) => void;
@@ -28,8 +31,8 @@ type Actions = {
 const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
 
 export class TextDoc extends AbstractDoc {
-  readonly heading: CVar<string>; // -> RichText?
-  readonly content: CVar<string>; // -> RichText?
+  readonly heading: CVar<string>; // RichText?
+  readonly content: CVar<string>; // RichText?
 
   constructor(options?: DocOptions) {
     super(options);
@@ -64,13 +67,31 @@ export const useDocumentStore = create<
   uncommitedChanges: new Uint8Array(),
   uncommitedCanvasChanges: new Uint8Array(),
   savedCanvasState: new Uint8Array(),
+  savedState: new Uint8Array(),
+
+  loadSavedState: () => {
+    const { doc, savedState, setSavedCanvasState } = get();
+    if (savedState.length > 0) {
+      if (doc) doc.load(savedState);
+      else get().uncommitedChanges = savedState;
+      setSavedCanvasState(new Uint8Array());
+    }
+  },
+
+  setSavedState: (state: Uint8Array) => {
+    set({ savedState: state });
+  },
 
   setDocumentId: (id) => set({ documentId: id }),
 
   setDrawingMode: (mode) => set({ drawingMode: mode }),
 
   bindStore: (instance: TextDoc) => {
-    const uncommitedChanges = get().uncommitedChanges;
+    const { uncommitedChanges, savedState, setSavedState } = get();
+    if (savedState.length > 0) {
+      instance.load(savedState);
+      setSavedState(new Uint8Array());
+    }
     if (uncommitedChanges.length > 0) {
       instance.receive(uncommitedChanges);
     }

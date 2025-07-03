@@ -1,5 +1,4 @@
 import { TextDoc, useDocumentStore } from "@/state/document";
-import { useCollab } from "@collabs/react";
 import {
   MessageCommand,
   MessageType,
@@ -7,20 +6,12 @@ import {
   WSMessage,
 } from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { ScrollView } from "react-native-gesture-handler";
-import Markdown from "react-native-markdown-display";
+import { StyleSheet, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
+import DocumentBodyArea from "./Body";
+import DocumentHeadingArea from "./Heading";
 
-type NativeSelection = {
+export type NativeSelection = {
   start: number;
   end: number;
 };
@@ -32,133 +23,15 @@ interface DocumentScreenProps {
 
 const THROTTLE_DELAY = 300;
 
-function DocumentHeadingArea({
-  onChangeText,
-  doc,
-  optimistic,
-  onSelectionChange,
-}: {
-  doc: TextDoc;
-  optimistic: string;
-  onChangeText: (text: string) => void;
-  onSelectionChange: (selection: NativeSelection) => void;
-}) {
-  useCollab(doc.heading);
-  const text = optimistic !== "" ? optimistic : doc.heading.value;
-
-  return (
-    <TextInput
-      autoFocus={true}
-      multiline={true}
-      numberOfLines={1}
-      onSelectionChange={(event) =>
-        onSelectionChange(event.nativeEvent.selection)
-      }
-      placeholder="Heading"
-      placeholderTextColor="#999"
-      style={{
-        ...styles.inputHeading,
-        borderColor: "rgba(0, 0, 0, 0)",
-        outline: "none",
-      }}
-      onChangeText={onChangeText}
-      value={text}
-    />
-  );
-}
-
-// TODO: Markdown font sizes!
-// Fix the overflow issue with Markdown rendering
-// Make sure styles are applied correctly and set in the right place
-
-function DocumentBodyArea({
-  onChangeText,
-  doc,
-  optimistic,
-  onSelectionChange,
-}: {
-  doc: TextDoc;
-  optimistic: string;
-  onChangeText: (text: string) => void;
-  onSelectionChange: (selection: NativeSelection) => void;
-}) {
-  const { height } = useWindowDimensions();
-  useCollab(doc.content);
-
-  const text = optimistic !== "" ? optimistic : doc.content.value;
-  const [focused, setFocused] = useState<boolean>(false);
-
-  return (
-    <>
-      {focused ? (
-        <KeyboardAvoidingView>
-          <ScrollView>
-            <TextInput
-              placeholder="Start writing your document here (markdown supported)"
-              placeholderTextColor="#999"
-              multiline={true}
-              autoFocus={true}
-              onBlur={() => setFocused(false)}
-              onSelectionChange={(event) =>
-                onSelectionChange(event.nativeEvent.selection)
-              }
-              style={[
-                styles.inputBody,
-                {
-                  height: height - 220,
-                  borderColor: "rgba(0, 0, 0, 0)",
-                  outline: "none",
-                },
-              ]}
-              value={text}
-              onChangeText={onChangeText}
-            />
-          </ScrollView>
-        </KeyboardAvoidingView>
-      ) : (
-        <TouchableOpacity
-          style={[
-            styles.inputBody,
-            {
-              height: height - 220,
-            },
-          ]}
-          onPress={() => setFocused(true)}
-        >
-          <ScrollView
-            contentInsetAdjustmentBehavior="automatic"
-            style={{ height: "100%", width: "100%" }}
-          >
-            {text !== "" ? (
-              <Markdown
-                rules={{}}
-                style={{
-                  body: {
-                    width: "100%",
-                    overflow: "scroll",
-                  },
-                }}
-              >
-                {text}
-              </Markdown>
-            ) : (
-              <Text style={{ color: "#999", fontSize: 20 }}>
-                Start writing your document here (markdown supported)
-              </Text>
-            )}
-          </ScrollView>
-        </TouchableOpacity>
-      )}
-    </>
-  );
-}
-
 export default function DocumentScreen({
   switchView,
   sendWithoutBuffer,
 }: DocumentScreenProps) {
-  const { documentId, doc, bindStore } = useDocumentStore((state) => state);
+  const { documentId, doc, bindStore, setSavedState } = useDocumentStore(
+    (state) => state
+  );
 
+  // Global state?
   const [optimisticHeading, setOptimisticHeading] = useState<string>("");
   const [optimisticContent, setOptimisticContent] = useState<string>("");
 
@@ -175,7 +48,8 @@ export default function DocumentScreen({
     if (batchedActions.length === 0) {
       return;
     }
-    doc!.transact(() => {
+    if (!doc) return;
+    doc.transact(() => {
       for (const change of batchedActions) {
         if (change.type === "heading") {
           doc!.heading.set(change.content);
@@ -189,10 +63,10 @@ export default function DocumentScreen({
 
   useEffect(() => {
     if (!documentId) return;
-    const doc = new TextDoc();
-    bindStore(doc);
+    const textDoc = new TextDoc();
+    bindStore(textDoc);
     // This has to be bound here since it uses the WS hook function
-    doc.on("Send", (e) => {
+    textDoc.on("Send", (e) => {
       sendWithoutBuffer({
         type: MessageType.TEXT_STATE,
         command: MessageCommand.UPDATE,
@@ -203,7 +77,7 @@ export default function DocumentScreen({
     setLoaded(true);
     return () => {
       // TODO: Similar snapshots here?
-      // Cleanup the document store
+      setSavedState(textDoc.save());
       clearTimeout(timeoutRef.current!);
     };
   }, [documentId]);
@@ -248,7 +122,7 @@ export default function DocumentScreen({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={textStyles.container}>
       <DocumentToolbar switchView={switchView} />
       {loaded && doc && (
         <DocumentHeadingArea
@@ -258,7 +132,7 @@ export default function DocumentScreen({
           onSelectionChange={(_) => {}}
         />
       )}
-      <View style={styles.separator} />
+      <View style={textStyles.separator} />
       {loaded && doc && (
         <DocumentBodyArea
           doc={doc}
@@ -271,7 +145,7 @@ export default function DocumentScreen({
   );
 }
 
-const styles = StyleSheet.create({
+export const textStyles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 50,

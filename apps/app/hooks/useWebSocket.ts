@@ -1,77 +1,74 @@
 import { SERVER_URL } from "@/constants/server";
 import { useDocumentStore } from "@/state/document";
-import { MessageCommand, MessageType, WSMessage } from "@native-hono-cf/shared";
+import {
+  ErrorMessage,
+  MessageCommand,
+  MessageType,
+  webSocketMessageSchema,
+  WSMessage,
+} from "@native-hono-cf/shared";
 import { useCallback, useEffect, useRef } from "react";
-
-const BUFFER_INTERVAL = 250;
 
 interface UseWebSocketOptions {
   documentId: string | null;
   onError?: (error: Event) => void;
 }
 
-// TODO: Make sure this logic runs on the JS side
-// and does not interfere with the Skia thread to minize
-// performance issues when there are many messa
-// and path elements
-
-// TODO: Centralize the buffering logic here!
-
+// Since the two sides employ different buffering logics, the WS hook is kept
+// "simple" and does not buffer messages
 export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
-  const queuedWSMessages = useRef<WSMessage[]>([]);
-
   const receiveRemoteMessage = useDocumentStore(
     (state) => state.receiveRemoteMessage
   );
 
-  const sendBufferIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  const sendBufferedMessages = useCallback(() => {
-    if (
-      socketRef.current?.readyState === WebSocket.OPEN &&
-      queuedWSMessages.current.length > 0
-    ) {
-      const messageToSend = queuedWSMessages.current.pop();
-      if (messageToSend) {
+  const sendWithoutBuffer = useCallback(
+    (msg: WSMessage) => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
         try {
-          socketRef.current.send(JSON.stringify(messageToSend));
+          socketRef.current.send(JSON.stringify(msg));
         } catch (e) {
-          console.error("Error sending buffered message:", e, messageToSend);
+          console.error("Error sending message without buffer:", e, msg);
         }
       }
-      if (
-        queuedWSMessages.current.length === 0 &&
-        sendBufferIntervalRef.current
-      ) {
-        clearInterval(sendBufferIntervalRef.current);
-        sendBufferIntervalRef.current = null;
-      }
-      queuedWSMessages.current = [];
-    }
-  }, [documentId]);
+    },
+    [documentId]
+  );
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${SERVER_URL}/api/ws/${documentId}`);
     socketRef.current = ws;
 
     ws.onopen = () => {
+      // Establish the connection and request a snapshot
       ws.send(
         JSON.stringify({
           type: MessageType.SETUP,
           command: MessageCommand.INFO,
         } as WSMessage)
       );
-
-      sendBufferIntervalRef.current = setInterval(
-        sendBufferedMessages,
-        BUFFER_INTERVAL
-      );
     };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data as string) as WSMessage;
+        const wsMessageValidation = webSocketMessageSchema.safeParse(msg);
+        if (!wsMessageValidation.success) {
+          console.error(
+            "Invalid message schema:",
+            wsMessageValidation.error.flatten()
+          );
+          ws.send(
+            JSON.stringify({
+              type: MessageType.ERROR,
+              command: MessageCommand.INFO,
+              payload: {
+                message: "Invalid message schema",
+              },
+            } as ErrorMessage)
+          );
+          return;
+        }
         if (msg.type === MessageType.ERROR) {
           console.error(
             "WebSocket error message received:",
@@ -94,10 +91,6 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
       if (socketRef.current === ws) {
         socketRef.current = null;
       }
-      if (sendBufferIntervalRef.current) {
-        clearInterval(sendBufferIntervalRef.current);
-        sendBufferIntervalRef.current = null;
-      }
     };
 
     return () => {
@@ -107,25 +100,8 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
       ) {
         ws.close();
       }
-      if (sendBufferIntervalRef.current) {
-        clearInterval(sendBufferIntervalRef.current);
-        sendBufferIntervalRef.current = null;
-      }
     };
   }, [documentId]);
-
-  const sendWithoutBuffer = useCallback(
-    (msg: WSMessage) => {
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        try {
-          socketRef.current.send(JSON.stringify(msg));
-        } catch (e) {
-          console.error("Error sending message without buffer:", e, msg);
-        }
-      }
-    },
-    [documentId]
-  );
 
   return {
     sendWithoutBuffer,
