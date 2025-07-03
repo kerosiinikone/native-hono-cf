@@ -83,12 +83,7 @@ export class CanvasDoc extends AbstractDoc {
 
   addElement(el: ElementProperties): void {
     const newEl = this.elements.push();
-    newEl.setType(el.type);
-    newEl.setPos(el.x, el.y);
-    newEl.setFocalPoint(el.focalX, el.focalY);
-    newEl.setSize(el.width, el.height);
-    newEl.setMatrix(el.matrix);
-    newEl.setPath(el.path);
+    newEl.init(el);
   }
 
   removeElement(el: CElement): void {
@@ -152,12 +147,25 @@ export class CElement extends CObject {
     this.height = super.registerCollab("height", (init) => new CVar(init, 0));
   }
 
+  init(props: ElementProperties) {
+    this.setType(props.type);
+    this.setPos(props.x, props.y);
+    this.setFocalPoint(props.focalX, props.focalY);
+    this.setSize(props.width, props.height);
+    this.setMatrix(props.matrix);
+    this.setPath(props.path);
+  }
+
   isStretchable(): boolean {
-    return this._isRect();
+    return this.isRect();
   }
 
   isCircle(): boolean {
     return this.type.value === ElementType.Circle;
+  }
+
+  isRect(): boolean {
+    return this.type.value === ElementType.Rect;
   }
 
   setPos(x: number, y: number): void {
@@ -187,9 +195,10 @@ export class CElement extends CObject {
     this.type.set(type);
   }
 
+  // Mutates the CElement array -> must be manually rehydrated
   editRectWidth(newWidth: number, shiftX?: number): void {
     let nw = newWidth;
-    if (!this._isRect()) return;
+    if (!this.isRect()) return;
     if (newWidth < 50) {
       nw = 50;
     }
@@ -203,9 +212,10 @@ export class CElement extends CObject {
     );
   }
 
+  // Mutates the CElement array -> must be manually rehydrated
   editRectHeight(newHeight: number, shiftY?: number): void {
     let nh = newHeight;
-    if (!this._isRect()) return;
+    if (!this.isRect()) return;
     if (newHeight < 50) {
       nh = 50;
     }
@@ -225,9 +235,5 @@ export class CElement extends CObject {
 
   private setHeight(height: number): void {
     this.height.set(height);
-  }
-
-  private _isRect(): boolean {
-    return this.type.value === ElementType.Rect;
   }
 }

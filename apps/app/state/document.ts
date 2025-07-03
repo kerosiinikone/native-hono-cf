@@ -134,10 +134,12 @@ export const useDocumentStore = create<
     }
   },
 
+  // For cross-accessing the canvas state
   setSavedCanvasState: (state: Uint8Array<ArrayBufferLike>) => {
     set({ savedCanvasState: state });
   },
 
+  // For cross-accessing the canvas state
   setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => {
     set({ uncommitedCanvasChanges: changes });
   },

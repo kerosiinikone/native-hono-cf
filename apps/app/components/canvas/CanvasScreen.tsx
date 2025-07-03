@@ -22,16 +22,37 @@ interface CanvasScreenProps {
 
 const THROTTLE_DELAY = 300;
 
+function useUncommitedCanvasChanges(
+  canvasRef: React.MutableRefObject<CanvasDoc | null>
+) {
+  const { setUncommitedCanvasChanges, uncommitedCanvasChanges } =
+    useDocumentStore((state) => state);
+  if (!canvasRef.current) return;
+  // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
+  if (uncommitedCanvasChanges.length > 0) {
+    canvasRef.current.receive(uncommitedCanvasChanges);
+    setUncommitedCanvasChanges(new Uint8Array());
+  }
+}
+
+function useSavedCanvasState(
+  canvasRef: React.MutableRefObject<CanvasDoc | null>
+) {
+  const { savedCanvasState, setSavedCanvasState } = useDocumentStore(
+    (state) => state
+  );
+  if (!canvasRef.current) return;
+  if (savedCanvasState.length > 0) {
+    canvasRef.current.load(savedCanvasState);
+    setSavedCanvasState(new Uint8Array());
+  }
+}
+
 export default function CanvasScreen({
   switchView,
   sendWithoutBuffer,
 }: CanvasScreenProps) {
-  const {
-    documentId,
-    uncommitedCanvasChanges,
-    setUncommitedCanvasChanges,
-    savedCanvasState,
-  } = useDocumentStore((state) => state);
+  const { documentId } = useDocumentStore((state) => state);
   const { loadSavedState, setSavedState } = withSkia_useCanvasStore(
     (state) => state
   );
@@ -40,6 +61,9 @@ export default function CanvasScreen({
   const isThrottling = useRef<boolean>(false);
   const changeBuffer = useRef<Uint8Array | null>(null); // Buffer for changes before sending
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useUncommitedCanvasChanges(canvasRef);
+  useSavedCanvasState(canvasRef);
 
   const throttleTransaction = useCallback(() => {
     const batchedActions = changeBuffer.current;
@@ -58,6 +82,8 @@ export default function CanvasScreen({
     isThrottling.current = false;
   }, [canvasRef.current, sendWithoutBuffer]);
 
+  // TODO: a hook named "useCanvasDoc" -> to encapsulate the logic of creating
+  // the CanvasDoc instance?
   useEffect(() => {
     if (!documentId) return;
     const canvasDoc = new CanvasDoc();
@@ -86,11 +112,10 @@ export default function CanvasScreen({
     });
 
     return () => {
-      // Save for unmount -> send a MessageType.SNAPSHOT to the server!
-      // Also periodically save the state and send it to the server!
+      // Save for unmount -> send a MessageType.SNAPSHOT to the server
+      // Also periodically save the state and send it to the server
       //
       // TODO: useSendSnapshot hook? -> intervals on useEffect?
-      //
       // Save and send the senderCounter as well!!!! -> verify latest state
       const save = canvasDoc.save();
       if (!save.length) return;
@@ -104,24 +129,6 @@ export default function CanvasScreen({
       clearTimeout(timeoutRef.current!);
     };
   }, [documentId]);
-
-  // Merge these hooks?
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    if (savedCanvasState.length > 0) {
-      canvasRef.current.load(savedCanvasState);
-    }
-  }, [savedCanvasState, canvasRef.current]);
-
-  // EventEmitter?
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
-    if (uncommitedCanvasChanges.length > 0) {
-      canvasRef.current.receive(uncommitedCanvasChanges);
-      setUncommitedCanvasChanges(new Uint8Array());
-    }
-  }, [uncommitedCanvasChanges, canvasRef.current]);
 
   return (
     <GestureHandlerRootView style={canvasStyles.container}>
