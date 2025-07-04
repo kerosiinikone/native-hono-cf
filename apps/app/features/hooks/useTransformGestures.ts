@@ -1,4 +1,4 @@
-import { isAtBottomLeft } from "@/components/canvas/SelectPath";
+import { SELECT, TRANSFORM } from "@/constants";
 import { CElement } from "@/state/c_canvas";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { Matrix4, rotateZ, scale } from "@shopify/react-native-skia";
@@ -16,11 +16,17 @@ enum DragDirection {
   DOWN = "down",
 }
 
-const SPEED_FACTOR = 2;
-const MIN_WIDTH = 1;
-const MIN_HEIGHT = 1;
-const DEFAULT_AREA_OF_INTERACTION = 30;
-const THROTTLE_AMOUNT = 10;
+export function isAtBottomLeft(
+  x: number,
+  y: number,
+  windowHeight: number
+): boolean {
+  "worklet";
+  return (
+    x <= SELECT.DELETION_THRESHOLD &&
+    y >= windowHeight - SELECT.DELETION_THRESHOLD
+  );
+}
 
 export function multiply(...matrices: Matrix4[]) {
   "worklet";
@@ -47,17 +53,27 @@ export default function useTransformGestures({
   const origin = useSharedValue({ x: 0, y: 0 });
   const clock = useSharedValue(0);
   const dragDir = useSharedValue<DragDirection>(DragDirection.NONE);
-  const { x, y, focalX, focalY, width, height, matrix } = element;
 
+  const {
+    DEFAULT_AREA_OF_INTERACTION,
+    MIN_HEIGHT,
+    MIN_WIDTH,
+    SPEED_FACTOR,
+    THROTTLE_AMOUNT,
+  } = TRANSFORM;
+
+  const { x, y, focalX, focalY, width, height, matrix } = element;
   const { height: heightW } = useWindowDimensions();
 
   const performWidthUpdate = (args: { newWidth: number; x?: number }) => {
+    "worklet";
     if (!args) return;
     element.editRectWidth(Math.max(MIN_WIDTH, args.newWidth), args.x);
     notifyLocalChange();
   };
 
   const performHeightUpdate = (args: { newHeight: number; y?: number }) => {
+    "worklet";
     if (!args) return;
     element.editRectHeight(Math.max(MIN_HEIGHT, args.newHeight), args.y);
     notifyLocalChange();

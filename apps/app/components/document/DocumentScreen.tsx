@@ -10,18 +10,12 @@ import { StyleSheet, View } from "react-native";
 import { DocumentToolbar } from "../ui/DocumentToolbar";
 import DocumentBodyArea from "./Body";
 import DocumentHeadingArea from "./Heading";
-
-export type NativeSelection = {
-  start: number;
-  end: number;
-};
+import { DOCUMENT } from "@/constants";
 
 interface DocumentScreenProps {
   switchView: () => void;
   sendWithoutBuffer: (message: WSMessage) => void;
 }
-
-const THROTTLE_DELAY = 300;
 
 export default function DocumentScreen({
   switchView,
@@ -96,7 +90,7 @@ export default function DocumentScreen({
       timeoutRef.current = setTimeout(() => {
         throttleTransaction();
         setOptimisticHeading("");
-      }, THROTTLE_DELAY);
+      }, DOCUMENT.THROTTLE_DELAY);
     },
     [doc, documentId]
   );
@@ -116,7 +110,7 @@ export default function DocumentScreen({
       setTimeout(() => {
         throttleTransaction();
         setOptimisticContent("");
-      }, THROTTLE_DELAY);
+      }, DOCUMENT.THROTTLE_DELAY);
     },
     [doc, documentId]
   );
@@ -129,6 +123,7 @@ export default function DocumentScreen({
           doc={doc}
           onChangeText={handleLocalHeadingChange}
           optimistic={optimisticHeading}
+          textStyles={textStyles}
           onSelectionChange={(_) => {}}
         />
       )}
@@ -136,6 +131,7 @@ export default function DocumentScreen({
       {loaded && doc && (
         <DocumentBodyArea
           doc={doc}
+          textStyles={textStyles}
           optimistic={optimisticContent}
           onSelectionChange={(_) => {}}
           onChangeText={handleLocalBodyChange}

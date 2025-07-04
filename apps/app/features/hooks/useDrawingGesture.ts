@@ -1,5 +1,6 @@
+import { DRAWING } from "@/constants";
 import { CanvasDoc } from "@/state/c_canvas";
-import { ClientObject, withSkia_useCanvasStore } from "@/state/with_skia";
+import { ClientElement, withSkia_useCanvasStore } from "@/state/with_skia";
 import { ElementType } from "@native-hono-cf/shared";
 import {
   Matrix4,
@@ -11,9 +12,6 @@ import { Gesture, PanGesture } from "react-native-gesture-handler";
 import { SharedValue, useSharedValue } from "react-native-reanimated";
 import { multiply4, translate } from "react-native-redash";
 
-const MIN_DIMENSION_SIZE = 50;
-const DIMENSION_ADJUSTMENT = 20;
-
 function generateNewPath(
   currentPath: SharedValue<SkPath>,
   currentPathDimensions: SharedValue<{
@@ -24,22 +22,22 @@ function generateNewPath(
   }>,
   matrix: SharedValue<Matrix4>,
   canvasMatrix: SharedValue<Matrix4>
-): ClientObject {
+): ClientElement {
   "worklet";
   const pathDimensions = currentPathDimensions.value;
 
   let width = Math.abs(pathDimensions.xup - pathDimensions.xdown);
   let height = Math.abs(pathDimensions.yup - pathDimensions.ydown);
 
-  if (width < MIN_DIMENSION_SIZE) {
-    pathDimensions.xup += DIMENSION_ADJUSTMENT;
-    pathDimensions.xdown -= DIMENSION_ADJUSTMENT;
+  if (width < DRAWING.MIN_DIMENSION_SIZE) {
+    pathDimensions.xup += DRAWING.DIMENSION_ADJUSTMENT;
+    pathDimensions.xdown -= DRAWING.DIMENSION_ADJUSTMENT;
     width = Math.abs(pathDimensions.xup - pathDimensions.xdown);
   }
 
-  if (height < MIN_DIMENSION_SIZE) {
-    pathDimensions.yup += DIMENSION_ADJUSTMENT;
-    pathDimensions.ydown -= DIMENSION_ADJUSTMENT;
+  if (height < DRAWING.MIN_DIMENSION_SIZE) {
+    pathDimensions.yup += DRAWING.DIMENSION_ADJUSTMENT;
+    pathDimensions.ydown -= DRAWING.DIMENSION_ADJUSTMENT;
     height = Math.abs(pathDimensions.yup - pathDimensions.ydown);
   }
 
@@ -72,6 +70,7 @@ export default function useDrawingGesture(doc: CanvasDoc): {
   const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
 
   const path = Skia.Path.Make();
+
   const currentPath = useSharedValue(path);
   const matrix = useSharedValue(Matrix4());
   const currentPathDimensions = useSharedValue({

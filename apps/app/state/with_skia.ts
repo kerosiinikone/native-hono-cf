@@ -10,7 +10,7 @@ import { CanvasDoc, CElement } from "./c_canvas";
 // Keeps track of the canvas messages
 // and the current state of the canvas
 
-export type ClientObject = {
+export type ClientElement = {
   path: SkPath;
   x: number;
   y: number;
@@ -38,8 +38,6 @@ type Actions = {
 };
 
 export const withSkia_useCanvasStore = create<State & Actions>((set, get) => ({
-  // Might not be necessary to have this in the store
-  // -> passed as a ref
   elementBeingDragged: null,
   hasChanged: false,
   savedState: new Uint8Array(),

@@ -1,13 +1,10 @@
 import useCircle from "@/features/hooks/shapes/useCircle";
 import useRect from "@/features/hooks/shapes/useRect";
-import { CCanvas } from "@/state/c_canvas";
-import { useCollab } from "@collabs/react";
+import { CanvasDoc } from "@/state/c_canvas";
 import { ElementType } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
-export default function Toolbar({ doc }: { doc: CCanvas }) {
-  useCollab(doc);
-
+export default function Toolbar({ doc }: { doc: CanvasDoc }) {
   const { createRectPath } = useRect();
   const { createCirclePath } = useCircle();
 
@@ -49,7 +46,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "rgba(200, 200, 200, 0.8)",
     paddingVertical: 8,

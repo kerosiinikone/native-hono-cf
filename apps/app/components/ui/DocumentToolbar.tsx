@@ -14,7 +14,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: "row",
-    justifyContent: "space-around",
+    justifyContent: "flex-start",
     alignItems: "center",
     backgroundColor: "rgba(200, 200, 200, 0.8)",
     paddingVertical: 8,

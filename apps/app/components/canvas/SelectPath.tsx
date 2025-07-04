@@ -1,4 +1,5 @@
 import useTransformGestures, {
+  isAtBottomLeft,
   multiply,
 } from "@/features/hooks/useTransformGestures";
 import { CElement } from "@/state/c_canvas";
@@ -23,22 +24,13 @@ interface SelectPathProps {
   deleteElement: (el: CElement) => void;
 }
 
-const DELETION_THRESHOLD = 50;
-
-export function isAtBottomLeft(
-  x: number,
-  y: number,
-  windowHeight: number
-): boolean {
-  return x <= DELETION_THRESHOLD && y >= windowHeight - DELETION_THRESHOLD;
-}
-
 function computeFinalTransformMatrix(
   canvasMatrix: SharedValue<Matrix4>,
   matrix: SharedValue<Matrix4>,
   focalX: number,
   focalY: number
 ): number[] {
+  "worklet";
   const finalMatrix = multiply(canvasMatrix.value, matrix.value);
 
   const localCenterX = focalX;

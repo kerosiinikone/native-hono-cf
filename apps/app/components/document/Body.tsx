@@ -1,5 +1,4 @@
 import { TextDoc } from "@/state/document";
-import { NativeSelection, textStyles } from "./DocumentScreen";
 import {
   KeyboardAvoidingView,
   Text,
@@ -20,11 +19,13 @@ export default function DocumentBodyArea({
   doc,
   optimistic,
   onSelectionChange,
+  textStyles,
 }: {
   doc: TextDoc;
   optimistic: string;
   onChangeText: (text: string) => void;
-  onSelectionChange: (selection: NativeSelection) => void;
+  onSelectionChange: (selection: { start: number; end: number }) => void;
+  textStyles: any;
 }) {
   const { height } = useWindowDimensions();
   useCollab(doc.content);

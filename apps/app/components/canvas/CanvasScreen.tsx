@@ -14,25 +14,27 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { CanvasPointerMode } from "../ui/CanvasPointerMode";
 import Toolbar from "../ui/Toolbar";
 import SkiaCn from "./SkiaCn";
+import { CANVAS } from "@/constants";
 
 interface CanvasScreenProps {
-  switchView: () => void;
   sendWithoutBuffer: (message: WSMessage) => void;
+  switchView: () => void;
 }
 
-const THROTTLE_DELAY = 300;
-
+// ForwardRef?
 function useUncommitedCanvasChanges(
   canvasRef: React.MutableRefObject<CanvasDoc | null>
 ) {
   const { setUncommitedCanvasChanges, uncommitedCanvasChanges } =
     useDocumentStore((state) => state);
-  if (!canvasRef.current) return;
-  // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
-  if (uncommitedCanvasChanges.length > 0) {
-    canvasRef.current.receive(uncommitedCanvasChanges);
-    setUncommitedCanvasChanges(new Uint8Array());
-  }
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    // When reloading the page (the connection resets at the root of index.tsx), the savedState should be empty
+    if (uncommitedCanvasChanges.length > 0) {
+      canvasRef.current.receive(uncommitedCanvasChanges);
+      setUncommitedCanvasChanges(new Uint8Array());
+    }
+  }, [uncommitedCanvasChanges, canvasRef.current]);
 }
 
 function useSavedCanvasState(
@@ -41,18 +43,20 @@ function useSavedCanvasState(
   const { savedCanvasState, setSavedCanvasState } = useDocumentStore(
     (state) => state
   );
-  if (!canvasRef.current) return;
-  if (savedCanvasState.length > 0) {
-    canvasRef.current.load(savedCanvasState);
-    setSavedCanvasState(new Uint8Array());
-  }
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    if (savedCanvasState.length > 0) {
+      canvasRef.current.load(savedCanvasState);
+      setSavedCanvasState(new Uint8Array());
+    }
+  }, [savedCanvasState, canvasRef.current]);
 }
 
 export default function CanvasScreen({
-  switchView,
   sendWithoutBuffer,
+  switchView,
 }: CanvasScreenProps) {
-  const { documentId } = useDocumentStore((state) => state);
+  const documentId = useDocumentStore((state) => state.documentId);
   const { loadSavedState, setSavedState } = withSkia_useCanvasStore(
     (state) => state
   );
@@ -105,7 +109,7 @@ export default function CanvasScreen({
 
       timeoutRef.current = setTimeout(() => {
         throttleTransaction();
-      }, THROTTLE_DELAY);
+      }, CANVAS.THROTTLE_DELAY);
 
       // Send buffer was here!
       isThrottling.current = true;

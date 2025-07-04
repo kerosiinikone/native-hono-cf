@@ -15,6 +15,11 @@ export default function SkiaCn({ doc }: { doc: CanvasDoc }) {
 
   const drawingMode = useDocumentStore((state) => state.drawingMode);
   const canvasMatrix = withSkia_useCanvasStore((state) => state.canvasMatrix);
+
+  // This functionality could also be achieved trhorugh returning new elements from editRectWidth and editRectHeight
+  // and then adding thse back to the elements array
+  // but this is more efficient as it avoids creating new elements and just mutates the existing (although also
+  // having to "refresh the state")
   const _ = withSkia_useCanvasStore((state) => state.hasChanged);
 
   const { drawingGesture, currentPath } = useDrawingGesture(doc);

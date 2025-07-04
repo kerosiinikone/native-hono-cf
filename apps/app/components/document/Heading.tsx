@@ -1,5 +1,4 @@
 import { TextDoc } from "@/state/document";
-import { NativeSelection, textStyles } from "./DocumentScreen";
 import { useCollab } from "@collabs/react";
 import { TextInput } from "react-native-gesture-handler";
 
@@ -8,11 +7,13 @@ export default function DocumentHeadingArea({
   doc,
   optimistic,
   onSelectionChange,
+  textStyles,
 }: {
   doc: TextDoc;
   optimistic: string;
   onChangeText: (text: string) => void;
-  onSelectionChange: (selection: NativeSelection) => void;
+  onSelectionChange: (selection: { start: number; end: number }) => void;
+  textStyles: any; // Optional styles for the text input
 }) {
   useCollab(doc.heading);
   const text = optimistic !== "" ? optimistic : doc.heading.value;

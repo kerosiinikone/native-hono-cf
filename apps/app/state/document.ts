@@ -1,3 +1,4 @@
+import { STATE } from "@/constants";
 import { AbstractDoc, CVar, DocOptions, mergeMessages } from "@collabs/collabs";
 import {
   base64ToUint8Array,
@@ -27,8 +28,6 @@ type Actions = {
   setUncommitedCanvasChanges: (changes: Uint8Array<ArrayBufferLike>) => void;
   setSavedCanvasState: (state: Uint8Array<ArrayBufferLike>) => void;
 };
-
-const TEST_DOCUMENT_ID = "289d4f3c-3617-45cb-a696-15ed24386388";
 
 export class TextDoc extends AbstractDoc {
   readonly heading: CVar<string>; // RichText?
@@ -61,7 +60,7 @@ export const useDocumentStore = create<
       doc: TextDoc | null;
     }
 >((set, get) => ({
-  documentId: TEST_DOCUMENT_ID,
+  documentId: STATE.TEST_DOCUMENT_ID,
   drawingMode: "draw",
   doc: null,
   uncommitedChanges: new Uint8Array(),

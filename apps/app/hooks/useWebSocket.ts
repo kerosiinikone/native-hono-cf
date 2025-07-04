@@ -1,4 +1,4 @@
-import { SERVER_URL } from "@/constants/server";
+import { PROTO } from "@/constants";
 import { useDocumentStore } from "@/state/document";
 import {
   ErrorMessage,
@@ -36,7 +36,7 @@ export function useWebSocket({ documentId, onError }: UseWebSocketOptions) {
   );
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://${SERVER_URL}/api/ws/${documentId}`);
+    const ws = new WebSocket(`ws://${PROTO.SERVER_URL}/api/ws/${documentId}`);
     socketRef.current = ws;
 
     ws.onopen = () => {
