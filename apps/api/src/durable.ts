@@ -1,5 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
-import { D1Persistence, DObjectStorage } from "./persistence";
+import { D1Storage, DObjectStorage } from "./persistence";
 import { DocumentSession } from "./session";
 
 export class WebSocketServer extends DurableObject {
@@ -12,11 +12,11 @@ export class WebSocketServer extends DurableObject {
     this.ctx.blockConcurrencyWhile(async () => {
       this.documentId = (await ctx.storage.get("id")) as string;
       const doStorage = new DObjectStorage(this.ctx.storage);
-      const d1Persistence = new D1Persistence(env.DB, this.documentId);
+      const d1Store = new D1Storage(env.DB, this.documentId);
 
-      this.session = new DocumentSession(doStorage, d1Persistence);
+      this.session = new DocumentSession(doStorage, d1Store);
 
-      await this.session.initialize(await d1Persistence.loadState());
+      await this.session.initialize(await d1Store.loadState());
     });
   }
 
@@ -54,20 +54,11 @@ export class WebSocketServer extends DurableObject {
     this.session.handleMessage(ws, message);
   }
 
-  async webSocketClose(
-    ws: WebSocket,
-    code: number,
-    reason: string,
-    wasClean: boolean
-  ) {
-    console.log(
-      `[DO ${this.documentId}] WebSocket closed. Code: ${code}, Reason: ${reason}, Clean: ${wasClean}`
-    );
+  async webSocketClose(ws: WebSocket) {
     this.session.removeClient(ws);
   }
 
-  async webSocketError(ws: WebSocket, error: any) {
-    console.error(`[DO ${this.documentId}] WebSocket error:`, error);
+  async webSocketError(ws: WebSocket) {
     this.session.removeClient(ws);
   }
 }

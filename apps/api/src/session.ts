@@ -1,7 +1,6 @@
 import { mergeMessages } from "@collabs/collabs";
 import {
   base64ToUint8Array,
-  DocumentState,
   ErrorMessage,
   MessageCommand,
   MessageType,
@@ -11,11 +10,7 @@ import {
   WebSocketMessageSchema,
   WSMessage,
 } from "@native-hono-cf/shared";
-import {
-  D1Persistence,
-  DocumentObjectModel,
-  DocumentStorage,
-} from "./persistence";
+import { D1Storage, DocumentObjectModel, DocumentStorage } from "./persistence";
 import { debounce } from "./util";
 
 const DEBOUNCE = 5000;
@@ -27,25 +22,25 @@ export class DocumentSession {
 
   private clientMap: Map<WebSocket, string> = new Map();
   private durableObjectStorage: DocumentStorage;
-  private d1Persistence?: D1Persistence;
-  private debouncedPersistToD1: () => void;
+  private d1Storage?: D1Storage;
+  private debouncedStore: () => void;
 
   constructor(
     durableObjectStorage: DocumentStorage,
-    d1Persistence?: D1Persistence,
+    d1Persistence?: D1Storage,
     private persistenceDebounceTime: number = DEBOUNCE
   ) {
     this.durableObjectStorage = durableObjectStorage;
-    this.d1Persistence = d1Persistence;
+    this.d1Storage = d1Persistence;
 
-    this.debouncedPersistToD1 = debounce(
-      this._persistToD1Now.bind(this),
+    this.debouncedStore = debounce(
+      this.forceStore.bind(this),
       this.persistenceDebounceTime
     );
   }
 
   async initialize(initialD1State?: DocumentObjectModel | null): Promise<void> {
-    let loadedState = await this.durableObjectStorage._getState();
+    let loadedState = await this.durableObjectStorage.getState();
     if (!loadedState && initialD1State) {
       loadedState = initialD1State;
     }
@@ -61,17 +56,7 @@ export class DocumentSession {
         bytes.length > 0 ? bytes : this.latestCanvasSnapshot;
     }
 
-    // Necessary???
-    await this.durableObjectStorage._putState({
-      textDocLogBuffer:
-        this.textDocBufferState.length > 0
-          ? uint8ArrayToBase64(this.textDocBufferState)
-          : undefined,
-      latestCanvasSnapshot:
-        this.latestCanvasSnapshot.length > 0
-          ? uint8ArrayToBase64(this.latestCanvasSnapshot)
-          : undefined,
-    });
+    await this.persistState();
   }
 
   addClient(ws: WebSocket): string {
@@ -100,7 +85,6 @@ export class DocumentSession {
           "Invalid message schema:",
           wsMessageValidation.error.flatten()
         );
-        // Error msg wrapper util?
         ws.send(
           JSON.stringify({
             type: MessageType.ERROR,
@@ -149,7 +133,15 @@ export class DocumentSession {
               this.textDocBufferState = this.mergeDocMessages(bytes);
               break;
             default:
-              console.warn("Illegal command for TEXT_STATE:", command);
+              ws.send(
+                JSON.stringify({
+                  type: MessageType.ERROR,
+                  command: MessageCommand.INFO,
+                  payload: {
+                    message: `Unknown method for TEXT_STATE update: ${command}`,
+                  },
+                } as WSMessage)
+              );
               return;
           }
           this.broadcast(message as string, this.clientMap.get(ws));
@@ -171,7 +163,6 @@ export class DocumentSession {
               );
               this.persistState();
               break;
-
             default:
               ws.send(
                 JSON.stringify({
@@ -240,10 +231,9 @@ export class DocumentSession {
     });
   }
 
-  // Refactor these
-  private async _persistToD1Now(): Promise<void> {
-    if (this.d1Persistence) {
-      await this.d1Persistence.persistState({
+  private async forceStore(): Promise<void> {
+    if (this.d1Storage) {
+      await this.d1Storage.storeState({
         textDocLogBuffer:
           this.textDocBufferState.length > 0
             ? uint8ArrayToBase64(this.textDocBufferState)
@@ -256,9 +246,8 @@ export class DocumentSession {
     }
   }
 
-  // Refactor these
   async persistState(): Promise<void> {
-    await this.durableObjectStorage._putState({
+    await this.durableObjectStorage.putState({
       textDocLogBuffer:
         this.textDocBufferState.length > 0
           ? uint8ArrayToBase64(this.textDocBufferState)
@@ -268,24 +257,8 @@ export class DocumentSession {
           ? uint8ArrayToBase64(this.latestCanvasSnapshot)
           : undefined,
     });
-    if (this.d1Persistence) {
-      this.debouncedPersistToD1();
-    }
-  }
-
-  // Refactor these
-  async flush(): Promise<void> {
-    if (this.d1Persistence) {
-      await this.d1Persistence.persistState({
-        textDocLogBuffer:
-          this.textDocBufferState.length > 0
-            ? uint8ArrayToBase64(this.textDocBufferState)
-            : undefined,
-        latestCanvasSnapshot:
-          this.latestCanvasSnapshot.length > 0
-            ? uint8ArrayToBase64(this.latestCanvasSnapshot)
-            : undefined,
-      });
+    if (this.d1Storage) {
+      this.debouncedStore();
     }
   }
 }

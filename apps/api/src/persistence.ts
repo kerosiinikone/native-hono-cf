@@ -1,38 +1,37 @@
-// TODO: Make this coherent!
 export type DocumentObjectModel = {
   textDocLogBuffer?: string;
   latestCanvasSnapshot?: string;
 };
 
 export interface DocumentStorage {
-  _getState(): Promise<DocumentObjectModel | null>;
-  _putState(state: DocumentObjectModel): Promise<void>;
-  _getId(): Promise<string | null>;
-  _setId(id: string): Promise<void>;
+  getState(): Promise<DocumentObjectModel | null>;
+  putState(state: DocumentObjectModel): Promise<void>;
+  getId(): Promise<string | null>;
+  setId(id: string): Promise<void>;
 }
 
 export class DObjectStorage implements DocumentStorage {
   constructor(private storage: DurableObjectStorage) {}
 
-  async _getState(): Promise<DocumentObjectModel | null> {
+  async getState(): Promise<DocumentObjectModel | null> {
     const savedState = (await this.storage.get("state")) as string | null;
     return savedState ? (JSON.parse(savedState) as DocumentObjectModel) : null;
   }
 
-  async _putState(state: DocumentObjectModel): Promise<void> {
+  async putState(state: DocumentObjectModel): Promise<void> {
     await this.storage.put("state", JSON.stringify(state));
   }
 
-  async _getId(): Promise<string | null> {
+  async getId(): Promise<string | null> {
     return (await this.storage.get("id")) as string | null;
   }
 
-  async _setId(id: string): Promise<void> {
+  async setId(id: string): Promise<void> {
     await this.storage.put("id", id);
   }
 }
 
-export class D1Persistence {
+export class D1Storage {
   constructor(private db: D1Database, private documentId: string) {}
 
   async loadState(): Promise<DocumentObjectModel | null> {
@@ -53,7 +52,7 @@ export class D1Persistence {
     }
   }
 
-  async persistState(state: DocumentObjectModel): Promise<void> {
+  async storeState(state: DocumentObjectModel): Promise<void> {
     if (!this.documentId) {
       return;
     }
