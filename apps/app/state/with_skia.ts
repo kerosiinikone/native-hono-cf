@@ -1,7 +1,7 @@
 import { Matrix4, SkPath } from "@shopify/react-native-skia";
 import { makeMutable, SharedValue } from "react-native-reanimated";
 import { create } from "zustand";
-import { CanvasDoc, CElement } from "./c_canvas";
+import { CanvasDoc, CElement, UndoCommand } from "./c_canvas";
 
 // Has to be a separate slice
 // since it is used in the Skia
@@ -27,6 +27,8 @@ type State = {
   savedState: Uint8Array;
   hasChanged: boolean;
   elementBeingDragged: CElement | null;
+  // TODO: Max length for undo/redo buffer?
+  redoBuffer: UndoCommand[];
 };
 
 type Actions = {
@@ -35,6 +37,8 @@ type Actions = {
   notifyLocalChange: () => void;
   setElementBeingDragged: (element: CElement) => void;
   unsetElementBeingDragged: () => void;
+  appendToRedoBuffer: (op: UndoCommand) => void;
+  popFromRedoBuffer: () => UndoCommand | undefined;
 };
 
 export const withSkia_useCanvasStore = create<State & Actions>((set, get) => ({
@@ -43,6 +47,20 @@ export const withSkia_useCanvasStore = create<State & Actions>((set, get) => ({
   savedState: new Uint8Array(),
   uncommitedChanges: new Uint8Array(),
   canvasMatrix: makeMutable(Matrix4()),
+  redoBuffer: [],
+
+  appendToRedoBuffer: (op: UndoCommand) => {
+    const { redoBuffer } = get();
+    set({ redoBuffer: [...redoBuffer, op] });
+  },
+
+  popFromRedoBuffer: () => {
+    const { redoBuffer } = get();
+    if (!redoBuffer.length) return undefined;
+    const lastOp = redoBuffer[redoBuffer.length - 1];
+    set({ redoBuffer: redoBuffer.slice(0, -1) });
+    return lastOp;
+  },
 
   notifyLocalChange: () => {
     const { hasChanged } = get();

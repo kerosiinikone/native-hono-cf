@@ -1,4 +1,4 @@
-import { CanvasDoc } from "@/state/c_canvas";
+import { CanvasDoc, UndoCommand } from "@/state/c_canvas";
 import { useDocumentStore } from "@/state/document";
 import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { mergeMessages } from "@collabs/collabs";
@@ -57,11 +57,9 @@ export default function CanvasScreen({
   switchView,
 }: CanvasScreenProps) {
   const documentId = useDocumentStore((state) => state.documentId);
-  const { loadSavedState, setSavedState } = withSkia_useCanvasStore(
-    (state) => state
-  );
+  const { loadSavedState, setSavedState, redoBuffer, popFromRedoBuffer } =
+    withSkia_useCanvasStore((state) => state);
   const canvasRef = useRef<CanvasDoc | null>(null);
-
   const isThrottling = useRef<boolean>(false);
   const changeBuffer = useRef<Uint8Array | null>(null); // Buffer for changes before sending
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -138,7 +136,15 @@ export default function CanvasScreen({
     <GestureHandlerRootView style={canvasStyles.container}>
       <CanvasPointerMode switchView={switchView} />
       {canvasRef.current && <SkiaCn doc={canvasRef.current} />}
-      {canvasRef.current && <Toolbar doc={canvasRef.current} />}
+      {canvasRef.current && (
+        <Toolbar
+          doc={canvasRef.current}
+          undo={() => {
+            if (!redoBuffer.length) return;
+            canvasRef.current!.redo(popFromRedoBuffer()!);
+          }}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }

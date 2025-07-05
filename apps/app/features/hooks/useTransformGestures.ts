@@ -46,6 +46,7 @@ export default function useTransformGestures({
     setElementBeingDragged,
     unsetElementBeingDragged,
     elementBeingDragged,
+    appendToRedoBuffer,
     notifyLocalChange,
   } = withSkia_useCanvasStore((state) => state);
 
@@ -164,6 +165,10 @@ export default function useTransformGestures({
         element === elementBeingDragged &&
         isAtBottomLeft(e.absoluteX, e.absoluteY, heightW)
       ) {
+        appendToRedoBuffer({
+          type: "add",
+          element: element,
+        });
         deleteElement(element);
       }
       unsetElementBeingDragged();

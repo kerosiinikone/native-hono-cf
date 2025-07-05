@@ -14,6 +14,11 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 // AbstractDoc for element array (CanvasDoc) -> this is the state of the canvas,
 // Each element is a CObject (element) that can be transformed to/from server state
 
+export type UndoCommand = {
+  type: "add" | "remove"; // In reverse (move later maybe)
+  element: CElement; // The element that was added or removed
+};
+
 export interface ElementProperties {
   path: SkPath;
   type: ElementType;
@@ -67,8 +72,6 @@ class SkPathSerializer implements Serializer<SkPath> {
   }
 }
 
-// Transfer protocol util functions here (or make them into
-// hooks of their own) !!!
 export class CanvasDoc extends AbstractDoc {
   readonly elements: CList<CElement, []>;
 
@@ -81,25 +84,35 @@ export class CanvasDoc extends AbstractDoc {
     );
   }
 
-  addElement(el: ElementProperties): void {
+  redo(op: UndoCommand): void {
+    switch (op.type) {
+      case "add":
+        this.keepElement(op.element);
+        break;
+      case "remove":
+        this.archiveElement(op.element);
+        break;
+    }
+  }
+
+  addElement(el: ElementProperties): CElement {
     const newEl = this.elements.push();
     newEl.init(el);
+    return newEl;
   }
 
   removeElement(el: CElement): void {
     const idx = this.elements.indexOf(el);
     if (idx !== -1) {
-      this.elements.delete(idx);
+      this.elements.archive(idx);
     }
   }
 
-  // For concurrency control (later maybe)
-  private _keepElement(el: CElement) {
+  private keepElement(el: CElement) {
     this.elements.restore(el);
   }
 
-  // For concurrency control (later maybe)
-  private _archiveElement(el: CElement) {
+  private archiveElement(el: CElement) {
     const idx = this.elements.indexOf(el);
     if (idx !== -1) {
       this.elements.archive(idx);

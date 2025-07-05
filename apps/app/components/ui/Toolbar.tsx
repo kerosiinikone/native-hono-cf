@@ -1,31 +1,48 @@
 import useCircle from "@/features/hooks/shapes/useCircle";
 import useRect from "@/features/hooks/shapes/useRect";
 import { CanvasDoc } from "@/state/c_canvas";
+import { withSkia_useCanvasStore } from "@/state/with_skia";
 import { ElementType } from "@native-hono-cf/shared";
 import { Button, StyleSheet, View } from "react-native";
 
-export default function Toolbar({ doc }: { doc: CanvasDoc }) {
+export default function Toolbar({
+  doc,
+  undo,
+}: {
+  doc: CanvasDoc;
+  undo: () => void;
+}) {
+  const appendToRedoBuffer = withSkia_useCanvasStore(
+    (state) => state.appendToRedoBuffer
+  );
   const { createRectPath } = useRect();
   const { createCirclePath } = useCircle();
 
-  const undoPath = () => {
-    // TODO: Only pop the updates that the client has made itself
-    // -> for example, in SETUP, send a client id and only pop the updates
-    // that are from the client itself (by looping through the elements and checking)
-    const len = doc.elements.length;
-    if (!len) return;
-    doc.removeElement(doc.elements.get(len - 1));
+  const addRectPathToStore = () => {
+    const newElement = doc.addElement({
+      ...createRectPath(),
+      type: ElementType.Rect,
+    });
+    appendToRedoBuffer({
+      type: "remove",
+      element: newElement,
+    });
   };
 
-  const addRectPathToStore = () =>
-    doc.addElement({ ...createRectPath(), type: ElementType.Rect });
-
-  const addRCirclePathToStore = () =>
-    doc.addElement({ ...createCirclePath(), type: ElementType.Circle });
+  const addRCirclePathToStore = () => {
+    const newElement = doc.addElement({
+      ...createCirclePath(),
+      type: ElementType.Circle,
+    });
+    appendToRedoBuffer({
+      type: "remove",
+      element: newElement,
+    });
+  };
 
   return (
     <View style={styles.container}>
-      <Button title="Undo" color="rgba(243, 33, 33, 1)" onPress={undoPath} />
+      <Button title="Undo" color="rgba(243, 33, 33, 1)" onPress={undo} />
       <Button
         title="Rectangle"
         color="rgb(174, 0, 255)"

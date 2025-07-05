@@ -67,7 +67,9 @@ export default function useDrawingGesture(doc: CanvasDoc): {
   drawingGesture: PanGesture;
   currentPath: SharedValue<SkPath>;
 } {
-  const { canvasMatrix } = withSkia_useCanvasStore((state) => state);
+  const { canvasMatrix, appendToRedoBuffer } = withSkia_useCanvasStore(
+    (state) => state
+  );
 
   const path = Skia.Path.Make();
 
@@ -125,7 +127,11 @@ export default function useDrawingGesture(doc: CanvasDoc): {
         matrix,
         canvasMatrix
       );
-      doc.addElement({ ...newPath, type: ElementType.Path });
+      const newElement = doc.addElement({ ...newPath, type: ElementType.Path });
+      appendToRedoBuffer({
+        type: "remove",
+        element: newElement,
+      });
       resetCanvasVariables();
     });
 

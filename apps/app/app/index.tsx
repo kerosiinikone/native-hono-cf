@@ -9,9 +9,7 @@ export default function DocumentCanvasScreen() {
   // The Skia web component can't consume this from the global store for some reason
   // so we need to manage the screen view state here.
   const [screenView, setScreenView] = useState<number>(0);
-
   const documentId = useDocumentStore((state) => state.documentId);
-
   const { sendWithoutBuffer } = useWebSocket({
     documentId,
   });
