@@ -174,11 +174,12 @@ export default function useTransformGestures({
       unsetElementBeingDragged();
     });
 
-  // Matrix rotation causes edge dragging issues -> deal with it later
+  // Matrix rotation causes edge dragging issues sometimes
   // One option is the deapply the rotation to the matrix and the apply it back after
   // the edge dragging is done ???
 
-  Gesture.Rotation()
+  // If it becomes a problem -> feature flag
+  const rotate = Gesture.Rotation()
     .onBegin(() => {
       "worklet";
       origin.value = {
@@ -215,5 +216,5 @@ export default function useTransformGestures({
       updateOnEnd();
     });
 
-  return Gesture.Simultaneous(pan, pinch);
+  return Gesture.Simultaneous(pan, pinch, rotate);
 }

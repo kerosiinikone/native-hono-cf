@@ -30,7 +30,7 @@ export const canvasWebSocketMessageSchema = z.object({
       z.object({
         message: z.string(),
       }),
-      base64Uint8ArrayString, // For state updates
+      base64Uint8ArrayString,
     ])
     .optional(),
 });
@@ -44,7 +44,7 @@ export const textWebSocketMessageSchema = z.object({
       z.object({
         message: z.string(),
       }),
-      base64Uint8ArrayString, // For state updates
+      base64Uint8ArrayString,
     ])
     .optional(),
 });

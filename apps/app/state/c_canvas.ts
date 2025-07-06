@@ -15,8 +15,8 @@ import { makeMutable, SharedValue } from "react-native-reanimated";
 // Each element is a CObject (element) that can be transformed to/from server state
 
 export type UndoCommand = {
-  type: "add" | "remove"; // In reverse (move later maybe)
-  element: CElement; // The element that was added or removed
+  type: "add" | "remove";
+  element: CElement;
 };
 
 export interface ElementProperties {
@@ -44,7 +44,6 @@ class Matrix4Serializer implements Serializer<SharedValue<Matrix4>> {
       alignedMessage.byteOffset,
       16
     );
-    // Forced
     return makeMutable(
       Array.from(float32Array)
     ) as unknown as SharedValue<Matrix4>;
@@ -62,10 +61,11 @@ class Matrix4Serializer implements Serializer<SharedValue<Matrix4>> {
 
 class SkPathSerializer implements Serializer<SkPath> {
   deserialize(message: Uint8Array): SkPath {
-    return (
-      Skia.Path.MakeFromSVGString(new TextDecoder().decode(message)) ||
-      Skia.Path.Make() // For now
-    );
+    const path = Skia.Path.MakeFromSVGString(new TextDecoder().decode(message));
+    if (!path) {
+      throw new Error("Invalid SVG string.");
+    }
+    return path;
   }
   serialize(value: SkPath): Uint8Array {
     return new Uint8Array(new TextEncoder().encode(value.toSVGString()));

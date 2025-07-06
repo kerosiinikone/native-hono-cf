@@ -56,7 +56,7 @@ export class DocumentSession {
         bytes.length > 0 ? bytes : this.latestCanvasSnapshot;
     }
 
-    await this.persistState();
+    await this.storeState();
   }
 
   addClient(ws: WebSocket): string {
@@ -145,7 +145,7 @@ export class DocumentSession {
               return;
           }
           this.broadcast(message as string, this.clientMap.get(ws));
-          this.persistState();
+          this.storeState();
           break;
         case MessageType.STATE:
           const messageData = wsMessageValidation.data as StateUpdateMessage;
@@ -161,7 +161,7 @@ export class DocumentSession {
               this.latestCanvasSnapshot = base64ToUint8Array(
                 messageData.payload
               );
-              this.persistState();
+              this.storeState();
               break;
             default:
               ws.send(
@@ -197,7 +197,6 @@ export class DocumentSession {
           );
       }
     } catch (error) {
-      console.error("[DocumentSession] Error processing message:", error);
       ws.send(
         JSON.stringify({
           type: MessageType.ERROR,
@@ -246,7 +245,7 @@ export class DocumentSession {
     }
   }
 
-  async persistState(): Promise<void> {
+  async storeState(): Promise<void> {
     await this.durableObjectStorage.putState({
       textDocLogBuffer:
         this.textDocBufferState.length > 0
