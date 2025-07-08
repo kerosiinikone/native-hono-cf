@@ -13,6 +13,7 @@ I'll come back to these to make the project more presentable.
 - IOS and Android specific support
 - **Tests** and possibly a CI for staging deployments
 - Wrapper for creating and accessing different documents
+- Canvas zoom
 - UI
 
 <br/>
