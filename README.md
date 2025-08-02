@@ -6,6 +6,10 @@ A simple drawing and documenting app built on top of React Native Web (Expo). I 
 
 Right now the project lacks proper functionality to let users create and connect to arbitrary documents but it was originally meant more as fun side-project and a way to test out the `react-native-skia` library and its functionalities paired with dynamic gesture handling - something I had not done before (coming from plain React)
 
+## How to run
+
+Run the scripts in `apps/api` and `apps/app` to test locally
+
 ## TODOs
 
 I'll come back to these to make the project more presentable.
